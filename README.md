@@ -33,4 +33,4 @@ Make sure to install all the drivers from Pimoroni.
 - My installation makes use of images and animated GIFs from the "Howl's Moving Castle" feature film by Studio Ghibli. I downloaded them from Giphy, Tenor, or elsewhere. Since they are probably copyrighted, I have removed them from the repo.
   - Whichever image you use, make sure it's squared.
   - Have a look at the `calcifer_expressions()` function and rewrite it as needed to avoid errors.
-- Emojis are from [Twemoji](https://twemoji.twitter.com/), licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).å
+- Emojis are from [Twemoji](https://twemoji.twitter.com/), licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).

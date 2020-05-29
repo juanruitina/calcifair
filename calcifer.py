@@ -39,6 +39,10 @@ def turn_on_display():
 # Initialize display.
 disp.begin()
 
+# Load emoji while starts
+image = Image.open('assets/emoji-fire.png')
+disp.display(image)
+
 # Calcifer says hi
 print("Sensor warming up, please wait...")
 

@@ -70,6 +70,8 @@ def crude_progress_bar():
 sgp30.start_measurement(crude_progress_bar)
 sys.stdout.write('\n')
 
+screen_timeout = 0
+
 while True:
     # Get proximity
     ltr559.update_sensor()
@@ -83,7 +85,11 @@ while True:
     print(sgp30.command('get_baseline'))
 
     # Alerts
-    if prox >= 5 or result.equivalent_co2 > 1000:
+    if prox >= 5 or result.equivalent_co2 > 1000 or screen_timeout > 0:
+        if prox >= 5:
+            screen_timeout = 5  # seconds the screen will stay on
+        screen_timeout -= 1
+
         turn_on_display()
 
         color = (255, 255, 255)

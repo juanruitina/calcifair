@@ -4,11 +4,12 @@ Calcifer is the [resident fire demon](https://howlscastle.fandom.com/wiki/Calcif
 
 ## Hardware
 
-For now Calcifer runs on a Raspberry Pi 4 (2GB RAM) with Raspberry, and the following hardware, all bought from [Pimoroni](https://shop.pimoroni.com/):
+For now Calcifer runs on a Raspberry Pi 4 (2GB RAM) with Raspbian, and the following hardware, all bought from [Pimoroni](https://shop.pimoroni.com/):
 
-* SGP-30 Air Quality Sensor Breakout, for equivalent CO2 and volatile organic compounds (TVOC) readings
-* 1.3" SPI Colour LCD screen, with a 240×240 resolution.
-* LTR-559 Light and Proximity Sensor Breakout, so Calcifer's screen turns on whenever I put my hand close to them
+* **SGP-30 Air Quality Sensor Breakout**, for equivalent CO2 and volatile organic compounds (TVOC) readings.
+* **ST7789 1.3" SPI Colour LCD screen**, with 240×240 resolution.
+* **LTR-559 Light and Proximity Sensor Breakout**, so Calcifer's screen turns on whenever I put my hand close to them.
+* **Breakout Garden** (I2C + SPI).
 
 Make sure to install all the drivers from Pimoroni.
 
@@ -19,8 +20,9 @@ Make sure to install all the drivers from Pimoroni.
 ## To do
 
 - [x] Turn off screen when possible
-- [ ] Callibrate air quality sensor
-- [ ] Show GIF until sensor warms up
+- [ ] Calibrate air quality sensor
+- [ ] Add web server for live results (Flask?)
+- [ ] Show GIF while sensor warms up
 - [ ] Check proximity sensor more often than 1s
 - [ ] Integrate with https://io.adafruit.com/ or similar
 - [ ] Integrate with Home Assistant?

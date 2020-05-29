@@ -27,6 +27,15 @@ disp = ST7789.ST7789(
 WIDTH = disp.width
 HEIGHT = disp.height
 
+
+def turn_off_display():
+    disp.set_backlight(0)
+
+
+def turn_on_display():
+    disp.set_backlight(1)
+
+
 # Initialize display.
 disp.begin()
 
@@ -53,7 +62,7 @@ def calcifer_expressions(expression):
 
 
 def crude_progress_bar():
-    calcifer_expressions('talks')
+    # calcifer_expressions('talks')
     sys.stdout.write('.')
     sys.stdout.flush()
 
@@ -74,36 +83,44 @@ while True:
     print(sgp30.command('get_baseline'))
 
     # Alerts
-    color = (255, 255, 255)
-    background_color = (0, 0, 0)
-    if prox > 5:
-        background_color = (0, 255, 0)
-    elif (result.equivalent_co2 > 1000):
-        background_color = (255, 0, 0)
-    elif (result.equivalent_co2 > 700):
-        background_color = (255, 165, 0)
+    if prox >= 5 or result.equivalent_co2 > 1000:
+        turn_on_display()
 
-    img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)
-    draw = ImageDraw.Draw(img)
+        color = (255, 255, 255)
+        background_color = (0, 0, 0)
+        if (result.equivalent_co2 > 1000):
+            background_color = (255, 0, 0)
+        elif (result.equivalent_co2 > 700):
+            background_color = (255, 165, 0)
 
-    font = ImageFont.truetype(
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
-    font_bold = ImageFont.truetype(
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+        if background_color != (0, 0, 0):
+            img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)
+        else:
+            img = Image.open('assets/background.png')
 
-    draw.rectangle((0, 0, disp.width, 80), background_color)
+        draw = ImageDraw.Draw(img)
 
-    draw.text((10, 10), 'CO2', font=font, fill=color)
-    if (result.equivalent_co2 <= 400):
-        draw.text((10, 45), '<400', font=font_bold, fill=color)
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
+        font_bold = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+
+        draw.rectangle((0, 0, disp.width, 80), background_color)
+
+        draw.text((10, 10), 'CO2', font=font, fill=color)
+        if (result.equivalent_co2 <= 400):
+            draw.text((10, 45), '<400', font=font_bold, fill=color)
+        else:
+            draw.text((10, 45), str(result.equivalent_co2),
+                      font=font_bold, fill=color)
+        draw.text((10, 80), 'ppm', font=font, fill=color)
+
+        draw.text((125, 10), 'VOC', font=font, fill=color)
+        draw.text((125, 45), str(result.total_voc), font=font_bold, fill=color)
+        draw.text((125, 80), 'ppb', font=font, fill=color)
+
+        disp.display(img)
     else:
-        draw.text((10, 45), str(result.equivalent_co2),
-                  font=font_bold, fill=color)
-    draw.text((10, 80), 'ppm', font=font, fill=color)
+        turn_off_display()
 
-    draw.text((125, 10), 'VOC', font=font, fill=color)
-    draw.text((125, 45), str(result.total_voc), font=font_bold, fill=color)
-    draw.text((125, 80), 'ppb', font=font, fill=color)
-
-    disp.display(img)
     time.sleep(1.0)

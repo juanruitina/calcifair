@@ -1,6 +1,9 @@
+# -*- coding: utf-8 -*-
+
 import sys
 import time
 import os.path
+from datetime import datetime
 
 from sgp30 import SGP30
 from ltr559 import LTR559
@@ -44,7 +47,7 @@ image = Image.open('assets/emoji-fire.png')
 disp.display(image)
 
 # Calcifer says hi
-print("Sensor warming up, please wait...")
+print("🔥 Calcifer is warming up, please wait...")
 
 
 def calcifer_expressions(expression):
@@ -75,6 +78,7 @@ sgp30.start_measurement(crude_progress_bar)
 sys.stdout.write('\n')
 
 screen_timeout = 0
+start_time = datetime.now()
 
 while True:
     # Get proximity
@@ -85,11 +89,20 @@ while True:
 
     # Get air quality
     result = sgp30.get_air_quality()
-    print(result)
-    print(sgp30.command('get_baseline'))
+    print 'CO2: {} ppm, VOC: {} ppb | {}'.format(
+        result.equivalent_co2, result.total_voc, datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
+
+    # Air quality levels
+    # From Hong Kong Indoor Air Quality Management Group
+    # https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf
+    air_quality = "good"
+    if result.equivalent_co2 > 1000 or result.total_voc > 261:
+        air_quality = "bad"
+    elif result.equivalent_co2 > 800 or result.total_voc > 87:
+        air_quality = "medium"
 
     # Alerts
-    if prox >= 5 or result.equivalent_co2 > 1000 or screen_timeout > 0:
+    if prox >= 5 or air_quality == "bad" or screen_timeout > 0:
         if prox >= 5:
             screen_timeout = 5  # seconds the screen will stay on
         screen_timeout -= 1
@@ -98,10 +111,11 @@ while True:
 
         color = (255, 255, 255)
         background_color = (0, 0, 0)
-        if (result.equivalent_co2 > 1000):
+        if air_quality == "high":
             background_color = (255, 0, 0)
-        elif (result.equivalent_co2 > 700):
-            background_color = (255, 165, 0)
+        elif air_quality == "medium":
+            color = (0, 0, 0)
+            background_color = (255, 255, 0)
 
         if background_color != (0, 0, 0):
             img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)

@@ -3,7 +3,7 @@
 import sys
 import time
 import os.path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sgp30 import SGP30
 from ltr559 import LTR559
@@ -79,6 +79,8 @@ sys.stdout.write('\n')
 
 screen_timeout = 0
 start_time = datetime.now()
+baseline_log_counter = datetime.now() + timedelta(minutes=10)
+baseline_log_counter_valid = datetime.now() + timedelta(hours=12)
 
 while True:
     # Get proximity
@@ -91,6 +93,26 @@ while True:
     result = sgp30.get_air_quality()
     print 'CO2: {} ppm, VOC: {} ppb | {}'.format(
         result.equivalent_co2, result.total_voc, datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
+
+    # Log baseline
+    if (datetime.now() > baseline_log_counter):
+        baseline_log_counter = datetime.now() + timedelta(seconds=10)
+
+        baseline_log = open('logs/baseline.txt', 'a')
+
+        baseline_get = sgp30.command('get_baseline')
+        baseline_human = 'CO2: {}, VOC: {} | {}'.format(
+            baseline_get[0], baseline_get[1], datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
+
+        baseline_log.write(baseline_human + '\n')
+        print "Baseline: " + baseline_human
+
+        if (datetime.now() > baseline_log_counter_valid):
+            baseline_log.write("Valid: " + baseline_human + '\n')
+            print "Valid baseline: " + baseline_human
+        else:
+            baseline_log.write(baseline_human + '\n')
+            print "Baseline: " + baseline_human
 
     # Air quality levels
     # From Hong Kong Indoor Air Quality Management Group
@@ -140,7 +162,8 @@ while True:
         draw.text((10, 80), 'ppm', font=font, fill=color)
 
         draw.text((125, 10), 'VOC', font=font, fill=color)
-        draw.text((125, 45), str(result.total_voc), font=font_bold, fill=color)
+        draw.text((125, 45), str(result.total_voc),
+                  font=font_bold, fill=color)
         draw.text((125, 80), 'ppb', font=font, fill=color)
 
         disp.display(img)

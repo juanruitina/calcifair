@@ -23,6 +23,7 @@ Make sure to install all the drivers from Pimoroni.
 - [ ] Check that images exist (and their format)
 - [ ] Calibrate air quality sensor
 - [ ] Add web server for live results (Flask?)
+- [ ] Integrate with Telegram bot
 - [ ] Show GIF while sensor warms up
 - [ ] Check proximity sensor more often than 1s
 - [ ] Integrate with https://io.adafruit.com/ or similar

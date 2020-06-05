@@ -96,16 +96,13 @@ while True:
 
     # Log baseline
     if (datetime.now() > baseline_log_counter):
-        baseline_log_counter = datetime.now() + timedelta(seconds=10)
+        baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
         baseline_log = open('logs/baseline.txt', 'a')
 
         baseline_get = sgp30.command('get_baseline')
         baseline_human = 'CO2: {}, VOC: {} | {}'.format(
             baseline_get[0], baseline_get[1], datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
-
-        baseline_log.write(baseline_human + '\n')
-        print "Baseline: " + baseline_human
 
         if (datetime.now() > baseline_log_counter_valid):
             baseline_log.write("Valid: " + baseline_human + '\n')
@@ -133,7 +130,7 @@ while True:
 
         color = (255, 255, 255)
         background_color = (0, 0, 0)
-        if air_quality == "high":
+        if air_quality == "bad":
             background_color = (255, 0, 0)
         elif air_quality == "medium":
             color = (0, 0, 0)

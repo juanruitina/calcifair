@@ -50,8 +50,8 @@ image = Image.open('assets/emoji-fire.png')
 disp.display(image)
 
 # Calcifer says hi
-print("🔥 Calcifer is warming up, please wait...")
-print("SGP30 serial #", [hex(i) for i in sgp30.serial])
+print("🔥 Calcifer is waking up, please wait...")
+# print("SGP30 serial #", [hex(i) for i in sgp30.serial])
 
 
 def calcifer_expressions(expression):
@@ -72,12 +72,50 @@ def calcifer_expressions(expression):
             frame = 0
 
 
-sgp30.iaq_init()
-
 screen_timeout = 0
 start_time = datetime.now()
-baseline_log_counter = datetime.now() + timedelta(minutes=1)
-baseline_log_counter_valid = datetime.now() + timedelta(hours=12)
+
+# Initialise air quality sensor
+sgp30.iaq_init()
+
+# Load air quality sensor baseline from file
+baseline_file = 'sgp30-baseline.txt'
+baseline_log = 'logs/sgp30-baseline.txt'
+baseline_eCO2_restored, baseline_TVOC_restored = None, None
+
+if os.path.exists(baseline_file):
+    baseline_values = {}
+    with open(baseline_file, 'r') as file:
+        for line in file:
+            (key, val) = line.split('=')
+            baseline_values[key] = val.rstrip()
+        baseline_timestamp = datetime.strptime(
+            baseline_values['baseline_timestamp'], '%Y-%m-%d %H:%M:%S')
+
+        # Ignore stored baseline if older than a week
+        if datetime.now() < baseline_timestamp + timedelta(days=7):
+            baseline_eCO2_restored = int(baseline_values['eco2'], 16)
+            baseline_TVOC_restored = int(baseline_values['tvoc'], 16)
+            print('Stored baseline is recent enough: 0x{:x} 0x{:x} {}'.format(
+                baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp))
+
+            # Set baseline
+            sgp30.set_iaq_baseline(
+                baseline_eCO2_restored, baseline_TVOC_restored)
+        else:
+            print(
+                'Stored baseline is too old. Calcifer will store a new one in 12 hours')
+
+baseline_log_counter = datetime.now() + timedelta(minutes=10)
+
+# If there are not baseline values stored, wait 12 hours before saving every hour
+if baseline_eCO2_restored is None or baseline_TVOC_restored is None:
+    baseline_log_counter_valid = datetime.now() + timedelta(hours=12)
+else:
+    baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
+
+# Wait while sensor warms up
+time.sleep(15)
 
 while True:
     # Get proximity
@@ -87,25 +125,30 @@ while True:
     # print("Lux: {:06.2f}, Proximity: {:04d}".format(lux, prox))
 
     # Get air quality
-    time = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-    print('CO2: {} ppm, VOC: {} ppb | {}'.format(sgp30.eCO2, sgp30.TVOC, time))
+    current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print('CO2: {} ppm, VOC: {} ppb | {}'.format(
+        sgp30.eCO2, sgp30.TVOC, current_time_str))
 
     # Log baseline
     if (datetime.now() > baseline_log_counter):
-        baseline_log_counter = datetime.now() + timedelta(minutes=1)
-
-        baseline_log = open('logs/baseline.txt', 'a')
+        baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
         baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
-            sgp30.baseline_eCO2, sgp30.baseline_TVOC, time)
+            sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str)
 
         if (datetime.now() > baseline_log_counter_valid):
             baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
-            baseline_log.write("Valid: " + baseline_human + '\n')
             print("Valid baseline: " + baseline_human)
+            with open(baseline_log, 'a') as file:
+                file.write("Valid: " + baseline_human + '\n')
+            # Store new valid baseline
+            with open(baseline_file, 'w') as file:
+                file.write('eco2=0x{:x}\ntvoc=0x{:x}\nbaseline_timestamp={}'.format(
+                    sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str))
         else:
-            baseline_log.write(baseline_human + '\n')
             print("Baseline: " + baseline_human)
+            with open(baseline_log, 'a') as file:
+                file.write(baseline_human + '\n')
 
     # Air quality levels
     # From Hong Kong Indoor Air Quality Management Group

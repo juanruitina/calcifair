@@ -6,12 +6,12 @@ Calcifer is the [resident fire demon](https://howlscastle.fandom.com/wiki/Calcif
 
 For now Calcifer runs on a Raspberry Pi 4 (2GB RAM) with Raspbian, and the following hardware, all bought from [Pimoroni](https://shop.pimoroni.com/):
 
-- **SGP-30 Air Quality Sensor Breakout**, for equivalent CO2 and volatile organic compounds (TVOC) readings.
+- **SGP-30 Air Quality Sensor Breakout**, for equivalent CO2 and volatile organic compounds (TVOC) reading ([install Adafruit library](https://learn.adafruit.com/adafruit-sgp30-gas-tvoc-eco2-mox-sensor/circuitpython-wiring-test)).
 - **ST7789 1.3" SPI Colour LCD screen**, with 240×240 resolution.
 - **LTR-559 Light and Proximity Sensor Breakout**, so Calcifer's screen turns on whenever I put my hand close to them.
 - **Breakout Garden** (I2C + SPI).
 
-Make sure to install all the drivers from Pimoroni.
+Unless otherwise stated, make sure to install the libraries from Pimoroni.
 
 ## Run Calcifer
 

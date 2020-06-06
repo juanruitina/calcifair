@@ -1,5 +1,5 @@
-sgp30-baseline.txt
-settings.json
+sgp30-baseline*.txt
+/.vscode
 /logs
 
 # Images that might be copyrighted

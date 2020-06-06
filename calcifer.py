@@ -103,19 +103,23 @@ if os.path.exists(baseline_file):
             sgp30.set_iaq_baseline(
                 baseline_eCO2_restored, baseline_TVOC_restored)
         else:
-            print(
-                'Stored baseline is too old. Calcifer will store a new one in 12 hours')
+            print('Stored baseline is too old')
 
 baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
 # If there are not baseline values stored, wait 12 hours before saving every hour
 if baseline_eCO2_restored is None or baseline_TVOC_restored is None:
     baseline_log_counter_valid = datetime.now() + timedelta(hours=12)
+    print('Calcifer will store a valid baseline in 12 hours')
 else:
     baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
 
 # Wait while sensor warms up
-time.sleep(15)
+warmup_counter = datetime.now() + timedelta(seconds=30)
+while datetime.now() < warmup_counter:
+    if sgp30.eCO2 > 400 and sgp30.TVOC > 0:
+        break
+    time.sleep(1)
 
 while True:
     # Get proximity

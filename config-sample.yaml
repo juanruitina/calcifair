@@ -1,0 +1,8 @@
+telegram:
+  telegram_api_token:
+  authorized_user_ids:
+
+sgp30_baseline:
+  eCO2:
+  TVOC:
+  timestamp:

@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from functools import wraps
 import sys
 import time
 import os.path
 from datetime import datetime, timedelta
+import yaml
 
 import board
 import busio
@@ -11,9 +13,17 @@ import adafruit_sgp30
 from ltr559 import LTR559
 import ST7789
 
-from PIL import ImageFont
-from PIL import ImageDraw
-from PIL import Image
+from PIL import ImageFont, ImageDraw, Image
+
+import logging
+from telegram.ext import Updater, CommandHandler, Filters
+
+# Load configuration file
+config = None
+with open('config.yaml') as file:
+    config = yaml.full_load(file)
+
+logging.basicConfig(filename='logs/python.txt')
 
 # Set up CO2 & VOC sensor
 i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
@@ -45,6 +55,52 @@ def turn_on_display():
 # Initialize display.
 disp.begin()
 
+# Initialize Telegram
+updater = Updater(
+    token=config['telegram']['token'], use_context=True)
+dispatcher = updater.dispatcher
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+
+# Restrict to certain Telegram users
+# https://github.com/python-telegram-bot/python-telegram-bot/wiki/Code-snippets#restrict-access-to-a-handler-decorator
+
+
+def restricted(func):
+    @wraps(func)
+    def wrapped(update, context, *args, **kwargs):
+        global config
+        user_id = update.effective_user.id
+        if user_id not in config['telegram']['authorized_user_ids']:
+            print("Unauthorized access denied for {}".format(user_id))
+            return
+        return func(update, context, *args, **kwargs)
+    return wrapped
+
+
+@restricted
+def start(update, context):
+    tg_message = ""
+    if sgp30.air_quality:
+        if sgp30.air_quality == 'bad':
+            tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
+        if sgp30.air_quality == 'medium':
+            tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
+        if sgp30.air_quality == 'good':
+            tg_message += "\nQué aire más limpio 💖"
+        tg_message += "\nCO2: {} ppm, VOC: {} ppb".format(
+            sgp30.eCO2, sgp30.TVOC)
+    else:
+        tg_message += "\nTodavía estoy poniéndome en marcha, así que no tengo datos aún"
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id, text=tg_message)
+
+
+start_handler = CommandHandler('start', start)
+dispatcher.add_handler(start_handler)
+updater.start_polling()
+
 # Load emoji while starts
 image = Image.open('assets/emoji-fire.png')
 disp.display(image)
@@ -71,6 +127,24 @@ def calcifer_expressions(expression):
         except EOFError:
             frame = 0
 
+# Air quality levels
+# From Hong Kong Indoor Air Quality Management Group
+# https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf
+
+
+def air_quality():
+    global sgp30
+    if sgp30:
+        if sgp30.eCO2 and sgp30.TVOC:
+            if sgp30.eCO2 > 1000 or sgp30.TVOC > 261:
+                sgp30.air_quality = "bad"
+            elif sgp30.eCO2 > 800 or sgp30.TVOC > 87:
+                sgp30.air_quality = "medium"
+            else:
+                sgp30.air_quality = "good"
+        else:
+            sgp30.air_quality = "unknown"
+
 
 screen_timeout = 0
 start_time = datetime.now()
@@ -78,33 +152,26 @@ start_time = datetime.now()
 # Initialise air quality sensor
 sgp30.iaq_init()
 
-# Load air quality sensor baseline from file
-baseline_file = 'sgp30-baseline.txt'
+# Load air quality sensor baseline from config file
+baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp = None, None, None
+if config['sgp30_baseline']['timestamp'] is not None:
+    baseline_timestamp = config['sgp30_baseline']['timestamp']
+
+    # Ignore stored baseline if older than a week
+    if datetime.now() < baseline_timestamp + timedelta(days=7):
+        baseline_eCO2_restored = config['sgp30_baseline']['eCO2']
+        baseline_TVOC_restored = config['sgp30_baseline']['TVOC']
+
+        print('Stored baseline is recent enough: 0x{:x} 0x{:x} {}'.format(
+            baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp))
+
+        # Set baseline
+        sgp30.set_iaq_baseline(
+            baseline_eCO2_restored, baseline_TVOC_restored)
+    else:
+        print('Stored baseline is too old')
+
 baseline_log = 'logs/sgp30-baseline.txt'
-baseline_eCO2_restored, baseline_TVOC_restored = None, None
-
-if os.path.exists(baseline_file):
-    baseline_values = {}
-    with open(baseline_file, 'r') as file:
-        for line in file:
-            (key, val) = line.split('=')
-            baseline_values[key] = val.rstrip()
-        baseline_timestamp = datetime.strptime(
-            baseline_values['baseline_timestamp'], '%Y-%m-%d %H:%M:%S')
-
-        # Ignore stored baseline if older than a week
-        if datetime.now() < baseline_timestamp + timedelta(days=7):
-            baseline_eCO2_restored = int(baseline_values['eco2'], 16)
-            baseline_TVOC_restored = int(baseline_values['tvoc'], 16)
-            print('Stored baseline is recent enough: 0x{:x} 0x{:x} {}'.format(
-                baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp))
-
-            # Set baseline
-            sgp30.set_iaq_baseline(
-                baseline_eCO2_restored, baseline_TVOC_restored)
-        else:
-            print('Stored baseline is too old')
-
 baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
 # If there are not baseline values stored, wait 12 hours before saving every hour
@@ -122,6 +189,8 @@ while datetime.now() < warmup_counter:
     time.sleep(1)
 
 while True:
+    air_quality()
+
     # Get proximity
     ltr559.update_sensor()
     lux = ltr559.get_lux()
@@ -134,37 +203,33 @@ while True:
         sgp30.eCO2, sgp30.TVOC, current_time_str))
 
     # Log baseline
-    if (datetime.now() > baseline_log_counter):
+    baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
+        sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str)
+
+    if datetime.now() > baseline_log_counter_valid:
+        baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
+        print("Valid baseline: " + baseline_human)
+        with open(baseline_log, 'a') as file:
+            file.write("Valid: " + baseline_human + '\n')
+
+        # Store new valid baseline
+        config['sgp30_baseline']['eCO2'] = sgp30.baseline_eCO2
+        config['sgp30_baseline']['TVOC'] = sgp30.baseline_TVOC
+        config['sgp30_baseline']['timestamp'] = datetime.now()
+
+        with open('config.yaml', 'w') as file:
+            yaml.dump(config, file)
+            print('Baseline updated on config file')
+
+    elif datetime.now() > baseline_log_counter:
         baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
-        baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
-            sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str)
-
-        if (datetime.now() > baseline_log_counter_valid):
-            baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
-            print("Valid baseline: " + baseline_human)
-            with open(baseline_log, 'a') as file:
-                file.write("Valid: " + baseline_human + '\n')
-            # Store new valid baseline
-            with open(baseline_file, 'w') as file:
-                file.write('eco2=0x{:x}\ntvoc=0x{:x}\nbaseline_timestamp={}'.format(
-                    sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str))
-        else:
-            print("Baseline: " + baseline_human)
-            with open(baseline_log, 'a') as file:
-                file.write(baseline_human + '\n')
-
-    # Air quality levels
-    # From Hong Kong Indoor Air Quality Management Group
-    # https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf
-    air_quality = "good"
-    if sgp30.eCO2 > 1000 or sgp30.TVOC > 261:
-        air_quality = "bad"
-    elif sgp30.eCO2 > 800 or sgp30.TVOC > 87:
-        air_quality = "medium"
+        print("Baseline: " + baseline_human)
+        with open(baseline_log, 'a') as file:
+            file.write(baseline_human + '\n')
 
     # Alerts
-    if prox >= 5 or air_quality == "bad" or screen_timeout > 0:
+    if prox >= 5 or screen_timeout > 0:
         if prox >= 5:
             screen_timeout = 5  # seconds the screen will stay on
         screen_timeout -= 1
@@ -173,9 +238,9 @@ while True:
 
         color = (255, 255, 255)
         background_color = (0, 0, 0)
-        if air_quality == "bad":
+        if sgp30.air_quality == "bad":
             background_color = (255, 0, 0)
-        elif air_quality == "medium":
+        elif sgp30.air_quality == "medium":
             color = (0, 0, 0)
             background_color = (255, 255, 0)
 

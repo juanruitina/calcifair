@@ -7,9 +7,8 @@ import os.path
 from datetime import datetime, timedelta
 import yaml
 
-import board
-import busio
-import adafruit_sgp30
+from sgp30 import SGP30
+
 from ltr559 import LTR559
 import ST7789
 
@@ -26,8 +25,7 @@ with open('config.yaml') as file:
 logging.basicConfig(filename='logs/python.txt')
 
 # Set up CO2 & VOC sensor
-i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
-sgp30 = adafruit_sgp30.Adafruit_SGP30(i2c)
+sgp30 = SGP30()
 
 # Set up light and proximity sensor
 ltr559 = LTR559()
@@ -89,7 +87,7 @@ def start(update, context):
         if sgp30.air_quality == 'good':
             tg_message += "\nQué aire más limpio 💖"
         tg_message += "\nCO2: {} ppm, VOC: {} ppb".format(
-            sgp30.eCO2, sgp30.TVOC)
+            result.equivalent_co2, result.total_voc)
     else:
         tg_message += "\nTodavía estoy poniéndome en marcha, así que no tengo datos aún"
 
@@ -135,10 +133,10 @@ def calcifer_expressions(expression):
 def air_quality():
     global sgp30
     if sgp30:
-        if sgp30.eCO2 and sgp30.TVOC:
-            if sgp30.eCO2 > 1000 or sgp30.TVOC > 261:
+        if result.equivalent_co2 and result.total_voc:
+            if result.equivalent_co2 > 1000 or result.total_voc > 261:
                 sgp30.air_quality = "bad"
-            elif sgp30.eCO2 > 800 or sgp30.TVOC > 87:
+            elif result.equivalent_co2 > 800 or result.total_voc > 87:
                 sgp30.air_quality = "medium"
             else:
                 sgp30.air_quality = "good"
@@ -150,7 +148,16 @@ screen_timeout = 0
 start_time = datetime.now()
 
 # Initialise air quality sensor
-sgp30.iaq_init()
+
+
+def crude_progress_bar():
+    # calcifer_expressions('talks')
+    sys.stdout.write('.')
+    sys.stdout.flush()
+
+
+sgp30.start_measurement(crude_progress_bar)
+sys.stdout.write('\n')
 
 # Load air quality sensor baseline from config file
 baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp = None, None, None
@@ -166,8 +173,8 @@ if config['sgp30_baseline']['timestamp'] is not None:
             baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp))
 
         # Set baseline
-        sgp30.set_iaq_baseline(
-            baseline_eCO2_restored, baseline_TVOC_restored)
+        result = sgp30.command(
+            'set_baseline', (baseline_eCO2_restored, baseline_TVOC_restored))
     else:
         print('Stored baseline is too old')
 
@@ -181,14 +188,9 @@ if baseline_eCO2_restored is None or baseline_TVOC_restored is None:
 else:
     baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
 
-# Wait while sensor warms up
-warmup_counter = datetime.now() + timedelta(seconds=30)
-while datetime.now() < warmup_counter:
-    if sgp30.eCO2 > 400 and sgp30.TVOC > 0:
-        break
-    time.sleep(1)
 
 while True:
+    result = sgp30.get_air_quality()
     air_quality()
 
     # Get proximity
@@ -200,11 +202,12 @@ while True:
     # Get air quality
     current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print('CO2: {} ppm, VOC: {} ppb | {}'.format(
-        sgp30.eCO2, sgp30.TVOC, current_time_str))
+        result.equivalent_co2, result.total_voc, current_time_str))
 
     # Log baseline
+    baseline_get = sgp30.command('get_baseline')
     baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
-        sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str)
+        baseline_get[0], baseline_get[1], current_time_str)
 
     if datetime.now() > baseline_log_counter_valid:
         baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
@@ -213,8 +216,8 @@ while True:
             file.write("Valid: " + baseline_human + '\n')
 
         # Store new valid baseline
-        config['sgp30_baseline']['eCO2'] = sgp30.baseline_eCO2
-        config['sgp30_baseline']['TVOC'] = sgp30.baseline_TVOC
+        config['sgp30_baseline']['eCO2'] = baseline_get[0]
+        config['sgp30_baseline']['TVOC'] = baseline_get[1]
         config['sgp30_baseline']['timestamp'] = datetime.now()
 
         with open('config.yaml', 'w') as file:
@@ -259,15 +262,15 @@ while True:
         draw.rectangle((0, 0, disp.width, 80), background_color)
 
         draw.text((10, 10), 'CO2', font=font, fill=color)
-        if (sgp30.eCO2 <= 400):
+        if (result.equivalent_co2 <= 400):
             draw.text((10, 45), '<400', font=font_bold, fill=color)
         else:
-            draw.text((10, 45), str(sgp30.eCO2),
+            draw.text((10, 45), str(result.equivalent_co2),
                       font=font_bold, fill=color)
         draw.text((10, 80), 'ppm', font=font, fill=color)
 
         draw.text((125, 10), 'VOC', font=font, fill=color)
-        draw.text((125, 45), str(sgp30.TVOC),
+        draw.text((125, 45), str(result.total_voc),
                   font=font_bold, fill=color)
         draw.text((125, 80), 'ppb', font=font, fill=color)
 

@@ -1,6 +1,7 @@
 config.yaml
 /.vscode
 /logs
+/__pycache__
 
 # Images that might be copyrighted
 calcifer-idle.gif

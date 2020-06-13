@@ -178,6 +178,7 @@ if config['sgp30_baseline']['timestamp'] is not None:
     else:
         print('Stored baseline is too old')
 
+full_log = 'logs/sgp30-full.txt'
 baseline_log = 'logs/sgp30-baseline.txt'
 baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
@@ -201,13 +202,18 @@ while True:
 
     # Get air quality
     current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print('CO2: {} ppm, VOC: {} ppb | {}'.format(
-        result.equivalent_co2, result.total_voc, current_time_str))
+    result_human = 'CO2: {} ppm, VOC: {} ppb | {}'.format(
+        result.equivalent_co2, result.total_voc, current_time_str)
+    print(result_human)
 
     # Log baseline
     baseline_get = sgp30.command('get_baseline')
     baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
         baseline_get[0], baseline_get[1], current_time_str)
+
+    if datetime.now() > baseline_log_counter:
+        with open(full_log, 'a') as file:
+            file.write(result_human + '\n')
 
     if datetime.now() > baseline_log_counter_valid:
         baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
@@ -227,6 +233,7 @@ while True:
     elif datetime.now() > baseline_log_counter:
         baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
+        file.write("Valid: " + baseline_human + '\n')
         print("Baseline: " + baseline_human)
         with open(baseline_log, 'a') as file:
             file.write(baseline_human + '\n')

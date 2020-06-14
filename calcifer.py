@@ -20,6 +20,8 @@ from PIL import ImageFont, ImageDraw, Image
 import logging
 from telegram.ext import Updater, CommandHandler, Filters
 
+from Adafruit_IO import Client
+
 # Load configuration file
 config = None
 with open('config.yaml') as file:
@@ -237,6 +239,27 @@ def update_iqair_result():
 
 
 update_iqair_result()
+
+# Send data to Adafruit IO
+aio = Client(config['adafruit']['username'], config['adafruit']['key'])
+
+
+def send_to_adafruit_io():
+    global aio, sgp30
+    aio_eCO2 = aio.feeds('eco2')
+    aio_TVOC = aio.feeds('tvoc')
+    aio.send_data(aio_eCO2.key, result.equivalent_co2)
+    aio.send_data(aio_TVOC.key, result.total_voc)
+    print("Readings sent to Adafruit IO")
+    threading.Timer(30.0, send_to_adafruit_io).start()
+
+
+def send_to_adafruit_io_run():
+    global aio, sgp30
+    threading.Timer(30.0, send_to_adafruit_io).start()
+
+
+send_to_adafruit_io_run()
 
 while True:
     result = sgp30.get_air_quality()

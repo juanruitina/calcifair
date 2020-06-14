@@ -27,12 +27,12 @@ Before running for the first time, copy `config-sample.yaml`, rename as `config.
 - [x] Turn off screen when possible
 - [x] Calibrate air quality sensor with baseline
 - [x] Integrate with Telegram bot
+- [x] Integrate with https://io.adafruit.com/ or similar
 - [ ] Calibrate air quality sensor with humidity
 - [ ] Check that images exist (and their format)
 - [ ] Add web server for live results (Flask?)
 - [ ] Show GIF while sensor warms up
 - [ ] Check proximity sensor more often than 1s
-- [ ] Integrate with https://io.adafruit.com/ or similar
 - [ ] Integrate with Home Assistant?
 
 ## Licences

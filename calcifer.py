@@ -133,7 +133,7 @@ def calcifer_expressions(expression):
 def air_quality():
     global sgp30
     if sgp30:
-        if result.equivalent_co2 and result.total_voc:
+        if result.equivalent_co2 is not None and result.total_voc is not None:
             if result.equivalent_co2 > 1000 or result.total_voc > 261:
                 sgp30.air_quality = "bad"
             elif result.equivalent_co2 > 800 or result.total_voc > 87:
@@ -233,7 +233,6 @@ while True:
     elif datetime.now() > baseline_log_counter:
         baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
-        file.write("Valid: " + baseline_human + '\n')
         print("Baseline: " + baseline_human)
         with open(baseline_log, 'a') as file:
             file.write(baseline_human + '\n')

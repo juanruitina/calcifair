@@ -3,6 +3,9 @@ config.yaml
 /logs
 /__pycache__
 
+*test*
+*copy*
+
 # Images that might be copyrighted
 calcifer-idle.gif
 calcifer-rawr.gif

@@ -1,3 +1,8 @@
+iqair:
+  token:
+location:
+  latitude:
+  longitude:
 sgp30_baseline:
   TVOC:
   eCO2:

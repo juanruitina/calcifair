@@ -6,6 +6,9 @@ import time
 import os.path
 from datetime import datetime, timedelta
 import yaml
+import json
+import requests
+import threading
 
 import board
 import busio
@@ -81,15 +84,37 @@ def restricted(func):
 @restricted
 def start(update, context):
     tg_message = ""
-    if sgp30.air_quality:
+    if sgp30.air_quality and iqair_aqi is not None:
         if sgp30.air_quality == 'bad':
-            tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
+            if iqair_aqi > 100:
+                tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es muy mala. Habrá que aguantarse. 😷"
+            elif iqair_aqi > 50:
+                tg_message += "\nHuele a tigre. Aunque la calidad del aire exterior no es muy buena, quizá sea oportuno ventilar un poco. 🔥"
+            else:
+                tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
+
         if sgp30.air_quality == 'medium':
-            tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
+            if iqair_aqi > 100:
+                tg_message += "\nAunque vendría bien ventilar un poco, la calidad del aire fuera de casa es muy mala. 💔"
+            elif iqair_aqi > 50:
+                tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es bastante mala. Habrá que aguantarse. 😷"
+            else:
+                tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
+
         if sgp30.air_quality == 'good':
-            tg_message += "\nQué aire más limpio 💖"
-        tg_message += "\nCO2: {} ppm, VOC: {} ppb".format(
-            sgp30.eCO2, sgp30.TVOC)
+            if iqair_aqi > 100:
+                tg_message += "\nLa calidad del aire es muy mala afuera, pero muy buena adentro. Hoy es mejor quedarse en casa y no ventilar. 🛋"
+            if iqair_aqi > 50:
+                tg_message += "\nLa calidad del aire es mala afuera, pero muy buena adentro. Hoy es mejor no ventilar. 🛋"
+            else:
+                tg_message += "\nQué aire más limpio 💖"
+
+        if sgp30.eCO2 == 400:
+            tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
+                sgp30.TVOC, iqair_aqi)
+        else:
+            tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
+                sgp30.eCO2, sgp30.TVOC, iqair_aqi)
     else:
         tg_message += "\nTodavía estoy poniéndome en marcha, así que no tengo datos aún"
 
@@ -181,6 +206,30 @@ if baseline_eCO2_restored is None or baseline_TVOC_restored is None:
     print('Calcifer will store a valid baseline in 12 hours')
 else:
     baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
+
+# External air quality provided by AirVisual (IQAir)
+# Based on US EPA National Ambient Air Quality Standards https://support.airvisual.com/en/articles/3029425-what-is-aqi
+# <50, Good; 51-100, Moderate (ventilation is discouraged); >101, Unhealthy
+
+iqair_query = 'https://api.airvisual.com/v2/nearest_city?lat={}&lon={}&key={}'.format(
+    config['location']['latitude'], config['location']['longitude'], config['iqair']['token'])
+iqair_result = None
+iqair_aqi = None
+
+
+def update_iqair_result():
+    global iqair_result, iqair_query, iqair_aqi
+    threading.Timer(1800.0, update_iqair_result).start()
+    iqair_result = requests.get(iqair_query)
+    iqair_result = iqair_result.json()
+    if iqair_result['status'] == 'success':
+        iqair_aqi = iqair_result['data']['current']['pollution']['aqius']
+        print("Outdoors air quality: AQI {} | {}".format(
+            iqair_aqi, iqair_result['data']['current']['pollution']['ts']))
+    return
+
+
+update_iqair_result()
 
 # Wait while sensor warms up
 warmup_counter = datetime.now() + timedelta(seconds=30)

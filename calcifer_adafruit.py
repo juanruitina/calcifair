@@ -165,7 +165,7 @@ def air_quality():
         if sgp30.eCO2 and sgp30.TVOC:
             if sgp30.eCO2 > 1000 or sgp30.TVOC > 261:
                 sgp30.air_quality = "bad"
-            elif sgp30.eCO2 > 800 or sgp30.TVOC > 87:
+            elif sgp30.eCO2 > 800:  # or sgp30.TVOC > 87:
                 sgp30.air_quality = "medium"
             else:
                 sgp30.air_quality = "good"

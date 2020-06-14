@@ -163,7 +163,7 @@ def air_quality():
         if result.equivalent_co2 is not None and result.total_voc is not None:
             if result.equivalent_co2 > 1000 or result.total_voc > 261:
                 sgp30.air_quality = "bad"
-            elif result.equivalent_co2 > 800 or result.total_voc > 87:
+            elif result.equivalent_co2 > 800:  # or result.total_voc > 87:
                 sgp30.air_quality = "medium"
             else:
                 sgp30.air_quality = "good"

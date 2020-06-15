@@ -238,18 +238,28 @@ aio = Client(config['adafruit']['username'], config['adafruit']['key'])
 
 
 def send_to_adafruit_io():
-    global aio, sgp30
+    global aio, sgp30, iqair_aqi
+
     aio_eCO2 = aio.feeds('eco2')
     aio_TVOC = aio.feeds('tvoc')
+    aio_baseline_eCO2 = aio.feeds('baseline-eco2')
+    aio_baseline_TVOC = aio.feeds('baseline-tvoc')
+    aio_aqi = aio.feeds('aqi')
+
     aio.send_data(aio_eCO2.key, sgp30.eCO2)
     aio.send_data(aio_TVOC.key, sgp30.TVOC)
+    aio.send_data(aio_baseline_eCO2.key, sgp30.baseline_eCO2)
+    aio.send_data(aio_baseline_TVOC.key, sgp30.baseline_TVOC)
+    aio.send_data(aio_aqi.key, iqair_aqi)
+
     print("Readings sent to Adafruit IO")
     threading.Timer(30.0, send_to_adafruit_io).start()
 
 
 def send_to_adafruit_io_run():
     global aio, sgp30
-    threading.Timer(30.0, send_to_adafruit_io).start()
+    # Start sending data to Adafruit IO after 15 min
+    threading.Timer(900.0, send_to_adafruit_io).start()
 
 
 send_to_adafruit_io_run()

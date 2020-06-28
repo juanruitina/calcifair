@@ -2,6 +2,7 @@ config.yaml
 /.vscode
 /logs
 /__pycache__
+/setup
 
 *test*
 *copy*

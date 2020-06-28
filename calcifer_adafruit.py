@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from Adafruit_IO import Client
+from telegram.ext import Updater, CommandHandler, Filters
+import logging
+from PIL import ImageFont, ImageDraw, Image
 from functools import wraps
 import sys
 import time
@@ -16,19 +20,20 @@ import adafruit_sgp30
 from ltr559 import LTR559
 import ST7789
 
-from PIL import ImageFont, ImageDraw, Image
+from setproctitle import setproctitle
 
-import logging
-from telegram.ext import Updater, CommandHandler, Filters
+setproctitle('calcifer-main')
 
-from Adafruit_IO import Client
+dir_path = os.path.dirname(os.path.realpath(__file__))
 
 # Load configuration file
 config = None
-with open('config.yaml') as file:
+file_config = os.path.join(dir_path, 'config.yaml')
+
+with open(file_config) as file:
     config = yaml.full_load(file)
 
-logging.basicConfig(filename='logs/python.txt')
+# logging.basicConfig(filename='logs/python.txt')
 
 # Set up CO2 & VOC sensor
 i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
@@ -129,7 +134,8 @@ dispatcher.add_handler(start_handler)
 updater.start_polling()
 
 # Load emoji while starts
-image = Image.open('assets/emoji-fire.png')
+image_path = os.path.join(dir_path, 'assets/emoji-fire.png')
+image = Image.open(image_path)
 disp.display(image)
 
 # Calcifer says hi
@@ -138,12 +144,14 @@ print("🔥 Calcifer is waking up, please wait...")
 
 
 def calcifer_expressions(expression):
+    image_path = None
     if expression == 'talks':
-        image = Image.open('assets/calcifer-talks.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-talks.gif')
     elif expression == 'idle':
-        image = Image.open('assets/calcifer-idle.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-idle.gif')
     elif expression == 'rawr':
-        image = Image.open('assets/calcifer-rawr.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-rawr.gif')
+    image = Image.open(image_path)
     frame = 0
     while frame < image.n_frames:
         try:
@@ -198,8 +206,8 @@ if config['sgp30_baseline']['timestamp'] is not None:
     else:
         print('Stored baseline is too old')
 
-result_log = 'logs/sgp30-result.txt'
-baseline_log = 'logs/sgp30-baseline.txt'
+result_log = os.path.join(dir_path, 'logs/sgp30-result.txt')
+baseline_log = os.path.join(dir_path, 'logs/sgp30-baseline.txt')
 baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
 # If there are not baseline values stored, wait 12 hours before saving every hour
@@ -305,7 +313,7 @@ while True:
         config['sgp30_baseline']['TVOC'] = sgp30.baseline_TVOC
         config['sgp30_baseline']['timestamp'] = datetime.now()
 
-        with open('config.yaml', 'w') as file:
+        with open(file_config, 'w') as file:
             yaml.dump(config, file)
             print('Baseline updated on config file')
 
@@ -335,7 +343,9 @@ while True:
         if background_color != (0, 0, 0):
             img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)
         else:
-            img = Image.open('assets/background.png')
+            image_path = os.path.join(
+                dir_path, 'assets/background.png')
+            img = Image.open(image_path)
 
         draw = ImageDraw.Draw(img)
 

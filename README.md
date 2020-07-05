@@ -1,6 +1,9 @@
 # Calcifer
 
-Calcifer is the [resident fire demon](https://howlscastle.fandom.com/wiki/Calcifer) of a Raspberry Pi located in Madrid, Spain. It captures relevant environmental information from their sensors and shows alerts when things go wrong. Calcifer is written in Python 3.
+Calcifer is the [resident fire demon](https://howlscastle.fandom.com/wiki/Calcifer) of a Raspberry Pi located in Madrid, Spain. It currently gives information and shows alerts about air quality. Calcifer is written in Python 3.
+
+* Gather indoors air quality levels via the SGP-30 sensor and get outdoors air quality from the IQAir AirVisual API.
+* Receive air quality information by asking a Telegram bot.
 
 ## Hardware
 
@@ -15,7 +18,7 @@ Unless otherwise stated, make sure to install the libraries from Pimoroni.
 
 ## Run Calcifer
 
-Before running for the first time, copy `config-sample.yaml`, rename as `config.yaml` and include your Telegram bot API token and the IDs of the authorised Telegram users.
+Before running for the first time, copy `config-sample.yaml`, rename as `config.yaml` and include your Telegram bot and IQAir AirVisual API tokens and the IDs of the authorised Telegram users.
 
 `python3 calcifer.py`
 
@@ -24,12 +27,12 @@ Before running for the first time, copy `config-sample.yaml`, rename as `config.
 - [x] Turn off screen when possible
 - [x] Calibrate air quality sensor with baseline
 - [x] Integrate with Telegram bot
+- [x] Integrate with https://io.adafruit.com/ or similar
 - [ ] Calibrate air quality sensor with humidity
 - [ ] Check that images exist (and their format)
 - [ ] Add web server for live results (Flask?)
 - [ ] Show GIF while sensor warms up
 - [ ] Check proximity sensor more often than 1s
-- [ ] Integrate with https://io.adafruit.com/ or similar
 - [ ] Integrate with Home Assistant?
 
 ## Licences

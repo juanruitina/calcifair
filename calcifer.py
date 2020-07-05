@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
 
+from Adafruit_IO import Client
+from telegram.ext import Updater, CommandHandler, Filters
+import logging
+from PIL import ImageFont, ImageDraw, Image
 from functools import wraps
 import sys
 import time
 import os.path
 from datetime import datetime, timedelta
 import yaml
+import json
+import requests
+import threading
 
 import board
 import busio
@@ -13,17 +20,20 @@ import adafruit_sgp30
 from ltr559 import LTR559
 import ST7789
 
-from PIL import ImageFont, ImageDraw, Image
+from setproctitle import setproctitle
 
-import logging
-from telegram.ext import Updater, CommandHandler, Filters
+setproctitle('calcifer-main')
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
 
 # Load configuration file
 config = None
-with open('config.yaml') as file:
+file_config = os.path.join(dir_path, 'config.yaml')
+
+with open(file_config) as file:
     config = yaml.full_load(file)
 
-logging.basicConfig(filename='logs/python.txt')
+# logging.basicConfig(filename='logs/python.txt')
 
 # Set up CO2 & VOC sensor
 i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
@@ -81,15 +91,37 @@ def restricted(func):
 @restricted
 def start(update, context):
     tg_message = ""
-    if sgp30.air_quality:
+    if sgp30.air_quality and iqair_aqi is not None:
         if sgp30.air_quality == 'bad':
-            tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
+            if iqair_aqi > 100:
+                tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es muy mala. Habrá que aguantarse. 😷"
+            elif iqair_aqi > 50:
+                tg_message += "\nHuele a tigre. Aunque la calidad del aire exterior no es muy buena, quizá sea oportuno ventilar un poco. 🔥"
+            else:
+                tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
+
         if sgp30.air_quality == 'medium':
-            tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
+            if iqair_aqi > 100:
+                tg_message += "\nAunque vendría bien ventilar un poco, la calidad del aire fuera de casa es muy mala. 💔"
+            elif iqair_aqi > 50:
+                tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es bastante mala. Habrá que aguantarse. 😷"
+            else:
+                tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
+
         if sgp30.air_quality == 'good':
-            tg_message += "\nQué aire más limpio 💖"
-        tg_message += "\nCO2: {} ppm, VOC: {} ppb".format(
-            sgp30.eCO2, sgp30.TVOC)
+            if iqair_aqi > 100:
+                tg_message += "\nLa calidad del aire es muy mala afuera, pero muy buena adentro. Hoy es mejor quedarse en casa y no ventilar. 🛋"
+            if iqair_aqi > 50:
+                tg_message += "\nLa calidad del aire es mala afuera, pero muy buena adentro. Hoy es mejor no ventilar. 🛋"
+            else:
+                tg_message += "\nQué aire más limpio 💖"
+
+        if sgp30.eCO2 == 400:
+            tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
+                sgp30.TVOC, iqair_aqi)
+        else:
+            tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
+                sgp30.eCO2, sgp30.TVOC, iqair_aqi)
     else:
         tg_message += "\nTodavía estoy poniéndome en marcha, así que no tengo datos aún"
 
@@ -102,7 +134,8 @@ dispatcher.add_handler(start_handler)
 updater.start_polling()
 
 # Load emoji while starts
-image = Image.open('assets/emoji-fire.png')
+image_path = os.path.join(dir_path, 'assets/emoji-fire.png')
+image = Image.open(image_path)
 disp.display(image)
 
 # Calcifer says hi
@@ -111,12 +144,14 @@ print("🔥 Calcifer is waking up, please wait...")
 
 
 def calcifer_expressions(expression):
+    image_path = None
     if expression == 'talks':
-        image = Image.open('assets/calcifer-talks.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-talks.gif')
     elif expression == 'idle':
-        image = Image.open('assets/calcifer-idle.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-idle.gif')
     elif expression == 'rawr':
-        image = Image.open('assets/calcifer-rawr.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-rawr.gif')
+    image = Image.open(image_path)
     frame = 0
     while frame < image.n_frames:
         try:
@@ -138,7 +173,7 @@ def air_quality():
         if sgp30.eCO2 and sgp30.TVOC:
             if sgp30.eCO2 > 1000 or sgp30.TVOC > 261:
                 sgp30.air_quality = "bad"
-            elif sgp30.eCO2 > 800 or sgp30.TVOC > 87:
+            elif sgp30.eCO2 > 800:  # or sgp30.TVOC > 87:
                 sgp30.air_quality = "medium"
             else:
                 sgp30.air_quality = "good"
@@ -171,7 +206,8 @@ if config['sgp30_baseline']['timestamp'] is not None:
     else:
         print('Stored baseline is too old')
 
-baseline_log = 'logs/sgp30-baseline.txt'
+result_log = os.path.join(dir_path, 'logs/sgp30-result.txt')
+baseline_log = os.path.join(dir_path, 'logs/sgp30-baseline.txt')
 baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
 # If there are not baseline values stored, wait 12 hours before saving every hour
@@ -180,6 +216,61 @@ if baseline_eCO2_restored is None or baseline_TVOC_restored is None:
     print('Calcifer will store a valid baseline in 12 hours')
 else:
     baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
+
+# External air quality provided by AirVisual (IQAir)
+# Based on US EPA National Ambient Air Quality Standards https://support.airvisual.com/en/articles/3029425-what-is-aqi
+# <50, Good; 51-100, Moderate (ventilation is discouraged); >101, Unhealthy
+
+iqair_query = 'https://api.airvisual.com/v2/nearest_city?lat={}&lon={}&key={}'.format(
+    config['location']['latitude'], config['location']['longitude'], config['iqair']['token'])
+iqair_result = None
+iqair_aqi = None
+
+
+def update_iqair_result():
+    global iqair_result, iqair_query, iqair_aqi
+    threading.Timer(1800.0, update_iqair_result).start()
+    iqair_result = requests.get(iqair_query)
+    iqair_result = iqair_result.json()
+    if iqair_result['status'] == 'success':
+        iqair_aqi = iqair_result['data']['current']['pollution']['aqius']
+        print("Outdoors air quality: AQI {} | {}".format(
+            iqair_aqi, iqair_result['data']['current']['pollution']['ts']))
+    return
+
+
+update_iqair_result()
+
+# Send data to Adafruit IO
+aio = Client(config['adafruit']['username'], config['adafruit']['key'])
+
+
+def send_to_adafruit_io():
+    global aio, sgp30, iqair_aqi
+
+    aio_eCO2 = aio.feeds('eco2')
+    aio_TVOC = aio.feeds('tvoc')
+    aio_baseline_eCO2 = aio.feeds('baseline-eco2')
+    aio_baseline_TVOC = aio.feeds('baseline-tvoc')
+    aio_aqi = aio.feeds('aqi')
+
+    aio.send_data(aio_eCO2.key, sgp30.eCO2)
+    aio.send_data(aio_TVOC.key, sgp30.TVOC)
+    aio.send_data(aio_baseline_eCO2.key, sgp30.baseline_eCO2)
+    aio.send_data(aio_baseline_TVOC.key, sgp30.baseline_TVOC)
+    aio.send_data(aio_aqi.key, iqair_aqi)
+
+    print("Readings sent to Adafruit IO")
+    threading.Timer(30.0, send_to_adafruit_io).start()
+
+
+def send_to_adafruit_io_run():
+    global aio, sgp30
+    # Start sending data to Adafruit IO after 15 min
+    threading.Timer(900.0, send_to_adafruit_io).start()
+
+
+send_to_adafruit_io_run()
 
 # Wait while sensor warms up
 warmup_counter = datetime.now() + timedelta(seconds=30)
@@ -199,12 +290,17 @@ while True:
 
     # Get air quality
     current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print('CO2: {} ppm, VOC: {} ppb | {}'.format(
-        sgp30.eCO2, sgp30.TVOC, current_time_str))
+    result_human = 'CO2: {} ppm, VOC: {} ppb | {}'.format(
+        sgp30.eCO2, sgp30.TVOC, current_time_str)
+    print(result_human)
 
     # Log baseline
     baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
         sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str)
+
+    if datetime.now() > baseline_log_counter:
+        with open(result_log, 'a') as file:
+            file.write(result_human + '\n')
 
     if datetime.now() > baseline_log_counter_valid:
         baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
@@ -217,7 +313,7 @@ while True:
         config['sgp30_baseline']['TVOC'] = sgp30.baseline_TVOC
         config['sgp30_baseline']['timestamp'] = datetime.now()
 
-        with open('config.yaml', 'w') as file:
+        with open(file_config, 'w') as file:
             yaml.dump(config, file)
             print('Baseline updated on config file')
 
@@ -247,7 +343,9 @@ while True:
         if background_color != (0, 0, 0):
             img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)
         else:
-            img = Image.open('assets/background.png')
+            image_path = os.path.join(
+                dir_path, 'assets/background.png')
+            img = Image.open(image_path)
 
         draw = ImageDraw.Draw(img)
 

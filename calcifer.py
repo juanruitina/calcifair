@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from Adafruit_IO import Client
+from telegram.ext import Updater, CommandHandler, Filters
+import logging
+from PIL import ImageFont, ImageDraw, Image
 from functools import wraps
 import sys
 import time
@@ -10,27 +14,30 @@ import json
 import requests
 import threading
 
-from sgp30 import SGP30
-
+import board
+import busio
+import adafruit_sgp30
 from ltr559 import LTR559
 import ST7789
 
-from PIL import ImageFont, ImageDraw, Image
+from setproctitle import setproctitle
 
-import logging
-from telegram.ext import Updater, CommandHandler, Filters
+setproctitle('calcifer-main')
 
-from Adafruit_IO import Client
+dir_path = os.path.dirname(os.path.realpath(__file__))
 
 # Load configuration file
 config = None
-with open('config.yaml') as file:
+file_config = os.path.join(dir_path, 'config.yaml')
+
+with open(file_config) as file:
     config = yaml.full_load(file)
 
-logging.basicConfig(filename='logs/python.txt')
+# logging.basicConfig(filename='logs/python.txt')
 
 # Set up CO2 & VOC sensor
-sgp30 = SGP30()
+i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
+sgp30 = adafruit_sgp30.Adafruit_SGP30(i2c)
 
 # Set up light and proximity sensor
 ltr559 = LTR559()
@@ -109,12 +116,12 @@ def start(update, context):
             else:
                 tg_message += "\nQué aire más limpio 💖"
 
-        if result.equivalent_co2 == 400:
+        if sgp30.eCO2 == 400:
             tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
-                result.total_voc, iqair_aqi)
+                sgp30.TVOC, iqair_aqi)
         else:
             tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
-                result.equivalent_co2, result.total_voc, iqair_aqi)
+                sgp30.eCO2, sgp30.TVOC, iqair_aqi)
     else:
         tg_message += "\nTodavía estoy poniéndome en marcha, así que no tengo datos aún"
 
@@ -127,7 +134,8 @@ dispatcher.add_handler(start_handler)
 updater.start_polling()
 
 # Load emoji while starts
-image = Image.open('assets/emoji-fire.png')
+image_path = os.path.join(dir_path, 'assets/emoji-fire.png')
+image = Image.open(image_path)
 disp.display(image)
 
 # Calcifer says hi
@@ -136,12 +144,14 @@ print("🔥 Calcifer is waking up, please wait...")
 
 
 def calcifer_expressions(expression):
+    image_path = None
     if expression == 'talks':
-        image = Image.open('assets/calcifer-talks.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-talks.gif')
     elif expression == 'idle':
-        image = Image.open('assets/calcifer-idle.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-idle.gif')
     elif expression == 'rawr':
-        image = Image.open('assets/calcifer-rawr.gif')
+        image_path = os.path.join(dir_path, 'assets/calcifer-rawr.gif')
+    image = Image.open(image_path)
     frame = 0
     while frame < image.n_frames:
         try:
@@ -160,10 +170,10 @@ def calcifer_expressions(expression):
 def air_quality():
     global sgp30
     if sgp30:
-        if result.equivalent_co2 is not None and result.total_voc is not None:
-            if result.equivalent_co2 > 1000 or result.total_voc > 261:
+        if sgp30.eCO2 and sgp30.TVOC:
+            if sgp30.eCO2 > 1000 or sgp30.TVOC > 261:
                 sgp30.air_quality = "bad"
-            elif result.equivalent_co2 > 800:  # or result.total_voc > 87:
+            elif sgp30.eCO2 > 800:  # or sgp30.TVOC > 87:
                 sgp30.air_quality = "medium"
             else:
                 sgp30.air_quality = "good"
@@ -175,16 +185,7 @@ screen_timeout = 0
 start_time = datetime.now()
 
 # Initialise air quality sensor
-
-
-def crude_progress_bar():
-    # calcifer_expressions('talks')
-    sys.stdout.write('.')
-    sys.stdout.flush()
-
-
-sgp30.start_measurement(crude_progress_bar)
-sys.stdout.write('\n')
+sgp30.iaq_init()
 
 # Load air quality sensor baseline from config file
 baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp = None, None, None
@@ -200,13 +201,13 @@ if config['sgp30_baseline']['timestamp'] is not None:
             baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp))
 
         # Set baseline
-        result = sgp30.command(
-            'set_baseline', (baseline_TVOC_restored, baseline_eCO2_restored))
+        sgp30.set_iaq_baseline(
+            baseline_eCO2_restored, baseline_TVOC_restored)
     else:
         print('Stored baseline is too old')
 
-result_log = 'logs/sgp30-result.txt'
-baseline_log = 'logs/sgp30-baseline.txt'
+result_log = os.path.join(dir_path, 'logs/sgp30-result.txt')
+baseline_log = os.path.join(dir_path, 'logs/sgp30-baseline.txt')
 baseline_log_counter = datetime.now() + timedelta(minutes=10)
 
 # If there are not baseline values stored, wait 12 hours before saving every hour
@@ -246,18 +247,17 @@ aio = Client(config['adafruit']['username'], config['adafruit']['key'])
 
 def send_to_adafruit_io():
     global aio, sgp30, iqair_aqi
-    
+
     aio_eCO2 = aio.feeds('eco2')
     aio_TVOC = aio.feeds('tvoc')
     aio_baseline_eCO2 = aio.feeds('baseline-eco2')
     aio_baseline_TVOC = aio.feeds('baseline-tvoc')
     aio_aqi = aio.feeds('aqi')
 
-    baseline_get = sgp30.command('get_baseline')
-    aio.send_data(aio_eCO2.key, result.equivalent_co2)
-    aio.send_data(aio_TVOC.key, result.total_voc)
-    aio.send_data(aio_baseline_eCO2.key, baseline_get[0])
-    aio.send_data(aio_baseline_TVOC.key, baseline_get[1])
+    aio.send_data(aio_eCO2.key, sgp30.eCO2)
+    aio.send_data(aio_TVOC.key, sgp30.TVOC)
+    aio.send_data(aio_baseline_eCO2.key, sgp30.baseline_eCO2)
+    aio.send_data(aio_baseline_TVOC.key, sgp30.baseline_TVOC)
     aio.send_data(aio_aqi.key, iqair_aqi)
 
     print("Readings sent to Adafruit IO")
@@ -272,8 +272,14 @@ def send_to_adafruit_io_run():
 
 send_to_adafruit_io_run()
 
+# Wait while sensor warms up
+warmup_counter = datetime.now() + timedelta(seconds=30)
+while datetime.now() < warmup_counter:
+    if sgp30.eCO2 > 400 and sgp30.TVOC > 0:
+        break
+    time.sleep(1)
+
 while True:
-    result = sgp30.get_air_quality()
     air_quality()
 
     # Get proximity
@@ -285,13 +291,12 @@ while True:
     # Get air quality
     current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     result_human = 'CO2: {} ppm, VOC: {} ppb | {}'.format(
-        result.equivalent_co2, result.total_voc, current_time_str)
+        sgp30.eCO2, sgp30.TVOC, current_time_str)
     print(result_human)
 
     # Log baseline
-    baseline_get = sgp30.command('get_baseline')
     baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
-        baseline_get[0], baseline_get[1], current_time_str)
+        sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str)
 
     if datetime.now() > baseline_log_counter:
         with open(result_log, 'a') as file:
@@ -304,11 +309,11 @@ while True:
             file.write("Valid: " + baseline_human + '\n')
 
         # Store new valid baseline
-        config['sgp30_baseline']['eCO2'] = baseline_get[0]
-        config['sgp30_baseline']['TVOC'] = baseline_get[1]
+        config['sgp30_baseline']['eCO2'] = sgp30.baseline_eCO2
+        config['sgp30_baseline']['TVOC'] = sgp30.baseline_TVOC
         config['sgp30_baseline']['timestamp'] = datetime.now()
 
-        with open('config.yaml', 'w') as file:
+        with open(file_config, 'w') as file:
             yaml.dump(config, file)
             print('Baseline updated on config file')
 
@@ -338,7 +343,9 @@ while True:
         if background_color != (0, 0, 0):
             img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)
         else:
-            img = Image.open('assets/background.png')
+            image_path = os.path.join(
+                dir_path, 'assets/background.png')
+            img = Image.open(image_path)
 
         draw = ImageDraw.Draw(img)
 
@@ -350,15 +357,15 @@ while True:
         draw.rectangle((0, 0, disp.width, 80), background_color)
 
         draw.text((10, 10), 'CO2', font=font, fill=color)
-        if (result.equivalent_co2 <= 400):
+        if (sgp30.eCO2 <= 400):
             draw.text((10, 45), '<400', font=font_bold, fill=color)
         else:
-            draw.text((10, 45), str(result.equivalent_co2),
+            draw.text((10, 45), str(sgp30.eCO2),
                       font=font_bold, fill=color)
         draw.text((10, 80), 'ppm', font=font, fill=color)
 
         draw.text((125, 10), 'VOC', font=font, fill=color)
-        draw.text((125, 45), str(result.total_voc),
+        draw.text((125, 45), str(sgp30.TVOC),
                   font=font_bold, fill=color)
         draw.text((125, 80), 'ppb', font=font, fill=color)
 

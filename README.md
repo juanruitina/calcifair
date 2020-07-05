@@ -1,4 +1,4 @@
-# Calcifer
+# 🔥 Calcifer
 
 Calcifer is the [resident fire demon](https://howlscastle.fandom.com/wiki/Calcifer) of a Raspberry Pi located in Madrid, Spain. It currently gives information and shows alerts about air quality. Calcifer is written in Python 3.
 

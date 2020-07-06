@@ -7,6 +7,10 @@
 # wait after boot and run Calcifer
 @reboot sleep 60 && nohup /usr/bin/python3 /home/calcifer/calcifer/calcifer.py > /home/calcifer/logs/start.sh.log &
 
-# let Calcifer rest 2-7am
+# let Calcifer rest 2-7am:
+
+# kill Calcifer process at 2pm
 0 2 * * * sudo pkill calcifer-main
-0 7 * * * sudo pgrep calcifer-main && echo "Calcifer is already on" || sleep 5 && nohup /usr/bin/python3 /home/calcifer/calcifer/calcifer.py > /home/calcifer/logs/start.sh.log &
+
+# from 7am-2am, check every hour if Calcifer is running. if not, run Calcifer
+0 0-1,7-23 * * * sudo pgrep calcifer-main && echo "Calcifer is already on" || sleep 5 && nohup /usr/bin/python3 /home/calcifer/calcifer/calcifer.py > /home/calcifer/logs/start.sh.log &

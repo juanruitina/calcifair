@@ -1,0 +1,12 @@
+# calcifer
+# crontab -e
+
+# turn off red LED on boot
+@reboot echo 0 | sudo tee /sys/class/leds/led1/brightness
+
+# wait after boot and run Calcifer
+@reboot sleep 60 && nohup /usr/bin/python3 /home/calcifer/calcifer/calcifer.py > /home/calcifer/logs/start.sh.log &
+
+# let Calcifer rest 2-7am
+0 2 * * * sudo pkill calcifer-main
+0 7 * * * sudo pgrep calcifer-main && echo "Calcifer is already on" || sleep 5 && nohup /usr/bin/python3 /home/calcifer/calcifer/calcifer.py > /home/calcifer/logs/start.sh.log &

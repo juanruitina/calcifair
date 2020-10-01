@@ -128,10 +128,56 @@ def start(update, context):
     context.bot.send_message(
         chat_id=update.effective_chat.id, text=tg_message)
 
+# https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/timerbot.py
 
-start_handler = CommandHandler('start', start)
-dispatcher.add_handler(start_handler)
+
+def alert(context):
+    """Send the alarm message."""
+    job = context.job
+    context.bot.send_message(job.context, text='Esto es un mensaje de prueba')
+
+
+def alerts(update, context):
+    """Add a job to the queue."""
+    chat_id = update.message.chat_id
+
+    """Every x seconds"""
+    when = 5
+
+    if 'job' in context.chat_data:
+        old_job = context.chat_data['job']
+        old_job.schedule_removal()
+    new_job = context.job_queue.run_repeating(alert, when, context=chat_id)
+    context.chat_data['job'] = new_job
+
+    update.message.reply_text('¡Alertas activadas!')
+
+
+def disable_alerts(update, context):
+    """Remove the job if the user changed their mind."""
+    if 'job' not in context.chat_data:
+        update.message.reply_text('No tienes las alertas activadas.')
+        return
+
+    job = context.chat_data['job']
+    job.schedule_removal()
+    del context.chat_data['job']
+
+    update.message.reply_text('¡Alertas desactivadas!')
+
+
+# on different commands - answer in Telegram
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(CommandHandler("alerts", alerts,
+                                      pass_args=True,
+                                      pass_job_queue=True,
+                                      pass_chat_data=True))
+dispatcher.add_handler(CommandHandler(
+    "disable_alerts", disable_alerts, pass_chat_data=True))
+
 updater.start_polling()
+# updater.idle()
+
 
 # Load emoji while starts
 image_path = os.path.join(dir_path, 'assets/emoji-fire.png')

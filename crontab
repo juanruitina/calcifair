@@ -9,7 +9,7 @@
 
 # let Calcifer rest 2-7am:
 
-# kill Calcifer process at 2pm
+# kill Calcifer process at 2am
 0 2 * * * sudo pkill calcifer-main
 
 # from 7am-2am, check every hour if Calcifer is running. if not, run Calcifer

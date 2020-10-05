@@ -22,7 +22,7 @@ import ST7789
 
 from setproctitle import setproctitle
 
-setproctitle('calcifer-main')
+setproctitle('calcifair-main')
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 

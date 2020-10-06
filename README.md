@@ -16,11 +16,26 @@ For now Calcifair runs on a Raspberry Pi 4 (2GB RAM) with Raspbian, and the foll
 
 Unless otherwise stated, make sure to install the libraries from Pimoroni.
 
+## Install
+
+Dependencies are managed by [`pipenv`](https://pipenv-es.readthedocs.io/es/latest/index.html).
+
+```sh
+sudo apt-get update
+sudo apt-get install python-pip libatlas-base-dev
+pip3 install pipenv
+pipenv install
+```
+
 ## Run Calcifair
 
 Before running for the first time, copy `config-sample.yaml`, rename as `config.yaml` and include your Telegram bot and IQAir AirVisual API tokens and the IDs of the authorised Telegram users.
 
 `python3 calcifair.py`
+
+Or:
+
+`pipenv run python3 calcifair.py`
 
 ## To do
 
@@ -41,21 +56,3 @@ Before running for the first time, copy `config-sample.yaml`, rename as `config.
   - Whichever image you use, make sure it's squared.
   - Have a look at the `calcifer_expressions()` function and rewrite it as needed to avoid errors.
 - Emojis are from [Twemoji](https://twemoji.twitter.com/), licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-
-## Dependencies
-
-```sh
-pip3 install adafruit-blinka
-pip3 install adafruit-io
-pip3 install adafruit-circuitpython-lis3dh
-pip3 install adafruit-circuitpython-sgp30
-pip3 install ltr559
-
-sudo apt-get update
-sudo apt-get install python-rpi.gpio python-spidev python-pip python-pil python-numpy
-pip3 install st7789
-
-pip3 install python-telegram-bot
-pip3 install PyYAML
-pip3 install setproctitle
-```

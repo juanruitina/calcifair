@@ -1,0 +1,24 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+adafruit-circuitpython-sgp30 = "*"
+adafruit-io = "*"
+ltr559 = "*"
+numpy = "*"
+pillow = "*"
+python-telegram-bot = "*"
+pyyaml = "*"
+"rpi.gpio" = "*"
+setproctitle = "*"
+smbus = "*"
+smbus2 = "*"
+spidev = "*"
+st7789 = "*"
+
+[requires]
+python_version = "3.7"

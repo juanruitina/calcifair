@@ -19,6 +19,7 @@ smbus = "*"
 smbus2 = "*"
 spidev = "*"
 st7789 = "*"
+psutil = "*"
 
 [requires]
 python_version = "3.7"

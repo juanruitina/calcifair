@@ -153,10 +153,36 @@ def start(update, context):
 # https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/timerbot.py
 
 
+alerts_enabled_ids = []
+checking_good_pending_ids = []
+checking_bad_pending_ids = []
+
+
 def alert(context):
     """Send the alarm message."""
+    global checking_good_pending_ids
     job = context.job
-    context.bot.send_message(job.context, text='Esto es un mensaje de prueba')
+    user_id = job.context
+
+    if user_id in checking_good_pending_ids or user_id in checking_bad_pending_ids:
+        if user_id in checking_good_pending_ids:
+            tg_message = "¡La calidad del aire ha mejorado un montón! Ya puedes cerrar las ventanas 🪟"
+            print('Good air quality alert')
+            checking_good_pending_ids.remove(user_id)
+        elif user_id in checking_bad_pending_ids:
+            tg_message = "¡La calidad del aire es muy mala! Toca ventilar 🖼️"
+            print('Bad air quality alert')
+            checking_bad_pending_ids.remove(user_id)
+
+        if sgp30.eCO2 == 400:
+            tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
+                sgp30.TVOC, iqair_aqi)
+        else:
+            tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
+                sgp30.eCO2, sgp30.TVOC, iqair_aqi)
+
+        context.bot.send_message(job.context, text=tg_message)
+        print('Air quality alert sent')
 
 
 def alerts(update, context):
@@ -166,7 +192,10 @@ def alerts(update, context):
         update.message.reply_text('Ya tienes las alertas activadas.')
         return
 
-    chat_id = update.message.chat_id
+    # chat_id = update.message.chat_id
+    user = update.message.from_user
+    # update.message.reply_text('Hola ' + user.first_name + '. Tu ID es ' + str(user.id))
+    alerts_enabled_ids.append(user.id)
 
     """Every x seconds"""
     when = 5
@@ -174,7 +203,8 @@ def alerts(update, context):
     if 'job' in context.chat_data:
         old_job = context.chat_data['job']
         old_job.schedule_removal()
-    new_job = context.job_queue.run_repeating(alert, when, context=chat_id)
+
+    new_job = context.job_queue.run_repeating(alert, when, context=user.id)
     context.chat_data['job'] = new_job
 
     update.message.reply_text('¡Alertas activadas!')
@@ -186,21 +216,31 @@ def disable_alerts(update, context):
         update.message.reply_text('No tienes las alertas activadas.')
         return
 
+    user = update.message.from_user
     job = context.chat_data['job']
     job.schedule_removal()
     del context.chat_data['job']
+    alerts_enabled_ids.remove(user.id)
 
     update.message.reply_text('¡Alertas desactivadas!')
 
 
 # on different commands - answer in Telegram
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(CommandHandler("alerts", alerts,
-                                      pass_args=True,
-                                      pass_job_queue=True,
-                                      pass_chat_data=True))
 dispatcher.add_handler(CommandHandler(
-    "disable_alerts", disable_alerts, pass_chat_data=True))
+    "start", start,
+    pass_args=True,
+    pass_job_queue=True,
+    pass_chat_data=True))
+dispatcher.add_handler(CommandHandler(
+    "alerts", alerts,
+    pass_args=True,
+    pass_job_queue=True,
+    pass_chat_data=True))
+dispatcher.add_handler(CommandHandler(
+    "disable_alerts", disable_alerts,
+    pass_args=True,
+    pass_job_queue=True,
+    pass_chat_data=True))
 
 updater.start_polling()
 # updater.idle()
@@ -235,12 +275,12 @@ def calcifer_expressions(expression):
         except EOFError:
             frame = 0
 
-# Air quality levels
-# From Hong Kong Indoor Air Quality Management Group
-# https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf
-
 
 def air_quality():
+    # Air quality levels
+    # From Hong Kong Indoor Air Quality Management Group
+    # https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf
+
     global sgp30
     if sgp30:
         if sgp30.eCO2 and sgp30.TVOC:
@@ -352,6 +392,11 @@ while datetime.now() < warmup_counter:
         break
     time.sleep(1)
 
+checking_good = False
+checking_good_count = 0
+checking_bad = False
+checking_bad_count = 0
+
 while True:
     air_quality()
 
@@ -397,7 +442,7 @@ while True:
         with open(baseline_log, 'a') as file:
             file.write(baseline_human + '\n')
 
-    # Alerts
+    # Screen alerts
     if prox >= 5 or screen_timeout > 0:
         if prox >= 5:
             screen_timeout = 5  # seconds the screen will stay on
@@ -445,5 +490,53 @@ while True:
         disp.display(img)
     else:
         turn_off_display()
+
+    # Telegram alerts
+
+    # Check if air quality gets from bad to good (-> notify enough ventilation time)
+    if (checking_good == False and sgp30.air_quality == 'bad'):
+        checking_good = True
+        checking_bad = False
+        print("Checking good air quality")
+    
+    if (checking_good == True):
+        if (sgp30.air_quality == 'good'):
+            checking_good_count += 1
+        else:
+            checking_good_count = 0
+
+        # Send alert if readings over the last 30 seconds show good air quality
+        if (checking_good_count > 30):
+            checking_good_pending_ids = alerts_enabled_ids.copy()            
+            checking_good = False
+            checking_good_count = 0
+
+    # Check if air quality gets from good to bad (-> notify ventilation needed)
+    if (checking_bad == False and sgp30.air_quality == 'good'):
+        checking_bad = True
+        checking_true = False
+        print("Checking bad air quality")
+
+    if (checking_bad == True):
+        if (sgp30.air_quality == 'bad'):
+            checking_bad_count += 1
+        else:
+            checking_bad_count = 0
+
+        # Send alert if readings over the last 30 seconds show good air quality
+        if (checking_bad_count > 30):
+            checking_bad_pending_ids = alerts_enabled_ids.copy()
+            checking_bad = False
+            checking_bad_count = 0
+
+    print('Users with enabled alerts: ')
+    pprint(alerts_enabled_ids)
+
+    if (checking_good == True or checking_bad == True):
+        print('Checking for ')
+        if (checking_good == True):
+            print('good, {}s'.format(checking_good_count))
+        if (checking_bad == True):
+            print('bad, {}s'.format(checking_bad_count))
 
     time.sleep(1.0)

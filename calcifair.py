@@ -13,15 +13,14 @@ import yaml
 import json
 import requests
 import threading
-
 import board
 import busio
 import adafruit_sgp30
 from ltr559 import LTR559
 import ST7789
-
 from setproctitle import setproctitle
 import psutil
+from pprint import pprint
 
 
 def checkIfProcessRunning(processName):
@@ -162,6 +161,11 @@ def alert(context):
 
 def alerts(update, context):
     """Add a job to the queue."""
+
+    if 'job' in context.chat_data:
+        update.message.reply_text('Ya tienes las alertas activadas.')
+        return
+
     chat_id = update.message.chat_id
 
     """Every x seconds"""

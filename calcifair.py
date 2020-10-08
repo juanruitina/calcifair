@@ -160,7 +160,7 @@ checking_bad_pending_ids = []
 
 def alert(context):
     """Send the alarm message."""
-    global checking_good_pending_ids
+    global checking_good_pending_ids, checking_bad_pending_ids
     job = context.job
     user_id = job.context
 
@@ -284,7 +284,7 @@ def air_quality():
     global sgp30
     if sgp30:
         if sgp30.eCO2 and sgp30.TVOC:
-            if sgp30.eCO2 > 1000 or sgp30.TVOC > 261:
+            if sgp30.eCO2 > 1000: # or sgp30.TVOC > 261:
                 sgp30.air_quality = "bad"
             elif sgp30.eCO2 > 800:  # or sgp30.TVOC > 87:
                 sgp30.air_quality = "medium"
@@ -523,8 +523,8 @@ while True:
         else:
             checking_bad_count = 0
 
-        # Send alert if readings over the last 30 seconds show good air quality
-        if (checking_bad_count > 30):
+        # Send alert if readings over the last 30 minutes show bad air quality
+        if (checking_bad_count > 1800):
             checking_bad_pending_ids = alerts_enabled_ids.copy()
             checking_bad = False
             checking_bad_count = 0

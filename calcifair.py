@@ -121,16 +121,14 @@ def start(update, context):
                 tg_message += "\nHuele a tigre. Aunque la calidad del aire exterior no es muy buena, quizá sea oportuno ventilar un poco. 🔥"
             else:
                 tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
-
-        if sgp30.air_quality == 'medium':
+       elif sgp30.air_quality == 'medium':
             if iqair_aqi > 100:
                 tg_message += "\nAunque vendría bien ventilar un poco, la calidad del aire fuera de casa es muy mala. 💔"
             elif iqair_aqi > 50:
                 tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es bastante mala. Habrá que aguantarse. 😷"
             else:
                 tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
-
-        if sgp30.air_quality == 'good':
+        elif sgp30.air_quality == 'good':
             if iqair_aqi > 100:
                 tg_message += "\nLa calidad del aire es muy mala afuera, pero muy buena adentro. Hoy es mejor quedarse en casa y no ventilar. 🛋"
             if iqair_aqi > 50:
@@ -166,7 +164,7 @@ def alert(context):
 
     if user_id in checking_good_pending_ids or user_id in checking_bad_pending_ids:
         if user_id in checking_good_pending_ids:
-            tg_message = "¡La calidad del aire ha mejorado un montón! Ya puedes cerrar las ventanas 🪟"
+            tg_message = "¡La calidad del aire ha mejorado un montón! Ya podemos cerrar las ventanas 🪟"
             print('Good air quality alert')
             checking_good_pending_ids.remove(user_id)
         elif user_id in checking_bad_pending_ids:
@@ -494,9 +492,8 @@ while True:
     # Telegram alerts
 
     # Check if air quality gets from bad to good (-> notify enough ventilation time)
-    if (checking_good == False and sgp30.air_quality == 'bad'):
+    if (checking_good == False and sgp30.air_quality != 'good'):
         checking_good = True
-        checking_bad = False
         print("Checking good air quality")
     
     if (checking_good == True):
@@ -512,9 +509,8 @@ while True:
             checking_good_count = 0
 
     # Check if air quality gets from good to bad (-> notify ventilation needed)
-    if (checking_bad == False and sgp30.air_quality == 'good'):
+    if (checking_bad == False and sgp30.air_quality != 'bad'):
         checking_bad = True
-        checking_true = False
         print("Checking bad air quality")
 
     if (checking_bad == True):

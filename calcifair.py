@@ -121,7 +121,7 @@ def start(update, context):
                 tg_message += "\nHuele a tigre. Aunque la calidad del aire exterior no es muy buena, quizá sea oportuno ventilar un poco. 🔥"
             else:
                 tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
-       elif sgp30.air_quality == 'medium':
+        elif sgp30.air_quality == 'medium':
             if iqair_aqi > 100:
                 tg_message += "\nAunque vendría bien ventilar un poco, la calidad del aire fuera de casa es muy mala. 💔"
             elif iqair_aqi > 50:

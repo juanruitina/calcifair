@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 
-from Adafruit_IO import Client
+from Adafruit_IO import Client, Feed, RequestError
 from telegram.ext import Updater, CommandHandler, Filters
 import logging
 from PIL import ImageFont, ImageDraw, Image
 from functools import wraps
 import sys
 import time
+from time import gmtime, strftime
 import os.path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import dateutil.parser
 import yaml
 import json
 import requests
@@ -22,6 +24,7 @@ from setproctitle import setproctitle
 import psutil
 from pprint import pprint
 
+from inc.time import *
 
 def checkIfProcessRunning(processName):
     '''
@@ -111,39 +114,62 @@ def restricted(func):
 
 
 @restricted
-def start(update, context):
+def tg_start(update, context):
     tg_message = ""
-    if sgp30.air_quality and iqair_aqi is not None:
+    if sgp30.air_quality and iqair_current['aqi'] is not None:
         if sgp30.air_quality == 'bad':
-            if iqair_aqi > 100:
+            if iqair_current['aqi'] > 100:
                 tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es muy mala. Habrá que aguantarse. 😷"
-            elif iqair_aqi > 50:
+            elif iqair_current['aqi'] > 50:
                 tg_message += "\nHuele a tigre. Aunque la calidad del aire exterior no es muy buena, quizá sea oportuno ventilar un poco. 🔥"
             else:
                 tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
         elif sgp30.air_quality == 'medium':
-            if iqair_aqi > 100:
+            if iqair_current['aqi'] > 100:
                 tg_message += "\nAunque vendría bien ventilar un poco, la calidad del aire fuera de casa es muy mala. 💔"
-            elif iqair_aqi > 50:
+            elif iqair_current['aqi'] > 50:
                 tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es bastante mala. Habrá que aguantarse. 😷"
             else:
                 tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
         elif sgp30.air_quality == 'good':
-            if iqair_aqi > 100:
+            if iqair_current['aqi'] > 100:
                 tg_message += "\nLa calidad del aire es muy mala afuera, pero muy buena adentro. Hoy es mejor quedarse en casa y no ventilar. 🛋"
-            if iqair_aqi > 50:
+            if iqair_current['aqi'] > 50:
                 tg_message += "\nLa calidad del aire es mala afuera, pero muy buena adentro. Hoy es mejor no ventilar. 🛋"
             else:
                 tg_message += "\nQué aire más limpio 💖"
 
         if sgp30.eCO2 == 400:
             tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.TVOC, iqair_aqi)
+                sgp30.TVOC, iqair_current['aqi'])
         else:
             tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.eCO2, sgp30.TVOC, iqair_aqi)
+                sgp30.eCO2, sgp30.TVOC, iqair_current['aqi'])
     else:
         tg_message += "\nTodavía estoy poniéndome en marcha, así que no tengo datos aún"
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id, text=tg_message)
+
+
+@restricted
+def tg_weather(update, context):
+    tg_message = ""
+    if iqair_result['status'] == 'success':
+        tg_message += "\nAfuera hace {}°C, y la humedad relativa es de {}%".format(
+            iqair_current['temp'],
+            iqair_current['humidity'] )
+        
+        tg_message += "\n\nLa calidad del aire es AQI {} ({})".format(
+            iqair_current['aqi'],
+            relative_time( iqair_current['pollution_timestamp'], 'es' ) )
+
+        if iqair_current['aqi'] > 100:
+            tg_message += " Hoy el aire de Madrid está muy contaminado. Es mejor no ventilar 🌆"
+        else:
+            tg_message += " Hoy se puede ventilar sin problema 🪟"
+    else:
+        tg_message += "Todavía estoy poniéndome en marcha, así que no tengo datos aún"
 
     context.bot.send_message(
         chat_id=update.effective_chat.id, text=tg_message)
@@ -155,8 +181,8 @@ alerts_enabled_ids = []
 checking_good_pending_ids = []
 checking_bad_pending_ids = []
 
-
-def alert(context):
+@restricted
+def tg_alert(context):
     """Send the alarm message."""
     global checking_good_pending_ids, checking_bad_pending_ids
     job = context.job
@@ -174,16 +200,16 @@ def alert(context):
 
         if sgp30.eCO2 == 400:
             tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.TVOC, iqair_aqi)
+                sgp30.TVOC, iqair_current['aqi'])
         else:
             tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.eCO2, sgp30.TVOC, iqair_aqi)
+                sgp30.eCO2, sgp30.TVOC, iqair_current['aqi'])
 
         context.bot.send_message(job.context, text=tg_message)
         print('Air quality alert sent')
 
-
-def alerts(update, context):
+@restricted
+def tg_alerts(update, context):
     """Add a job to the queue."""
 
     if 'job' in context.chat_data:
@@ -202,13 +228,13 @@ def alerts(update, context):
         old_job = context.chat_data['job']
         old_job.schedule_removal()
 
-    new_job = context.job_queue.run_repeating(alert, when, context=user.id)
+    new_job = context.job_queue.run_repeating(tg_alert, when, context=user.id)
     context.chat_data['job'] = new_job
 
     update.message.reply_text('¡Alertas activadas!')
 
-
-def disable_alerts(update, context):
+@restricted
+def tg_disable_alerts(update, context):
     """Remove the job if the user changed their mind."""
     if 'job' not in context.chat_data:
         update.message.reply_text('No tienes las alertas activadas.')
@@ -222,20 +248,24 @@ def disable_alerts(update, context):
 
     update.message.reply_text('¡Alertas desactivadas!')
 
-
 # on different commands - answer in Telegram
 dispatcher.add_handler(CommandHandler(
-    "start", start,
+    "start", tg_start,
     pass_args=True,
     pass_job_queue=True,
     pass_chat_data=True))
 dispatcher.add_handler(CommandHandler(
-    "alerts", alerts,
+    "alerts", tg_alerts,
     pass_args=True,
     pass_job_queue=True,
     pass_chat_data=True))
 dispatcher.add_handler(CommandHandler(
-    "disable_alerts", disable_alerts,
+    "disable_alerts", tg_disable_alerts,
+    pass_args=True,
+    pass_job_queue=True,
+    pass_chat_data=True))
+dispatcher.add_handler(CommandHandler(
+    "weather", tg_weather,
     pass_args=True,
     pass_job_queue=True,
     pass_chat_data=True))
@@ -293,7 +323,7 @@ def air_quality():
 
 
 screen_timeout = 0
-start_time = datetime.now()
+start_time = datetime.now(timezone.utc)
 
 # Initialise air quality sensor
 sgp30.iaq_init()
@@ -304,12 +334,14 @@ if config['sgp30_baseline']['timestamp'] is not None:
     baseline_timestamp = config['sgp30_baseline']['timestamp']
 
     # Ignore stored baseline if older than a week
-    if datetime.now() < baseline_timestamp + timedelta(days=7):
+    if datetime.now(timezone.utc) < baseline_timestamp + timedelta(days=7):
         baseline_eCO2_restored = config['sgp30_baseline']['eCO2']
         baseline_TVOC_restored = config['sgp30_baseline']['TVOC']
 
-        print('Stored baseline is recent enough: 0x{:x} 0x{:x} {}'.format(
-            baseline_eCO2_restored, baseline_TVOC_restored, baseline_timestamp))
+        print('Stored baseline is recent enough: 0x{:x} 0x{:x} | {}'.format(
+            baseline_eCO2_restored,
+            baseline_TVOC_restored,
+            readable_log_time(baseline_timestamp)))
 
         # Set baseline
         sgp30.set_iaq_baseline(
@@ -319,14 +351,14 @@ if config['sgp30_baseline']['timestamp'] is not None:
 
 result_log = os.path.join(dir_path, 'logs/sgp30-result.txt')
 baseline_log = os.path.join(dir_path, 'logs/sgp30-baseline.txt')
-baseline_log_counter = datetime.now() + timedelta(minutes=10)
+baseline_log_counter = datetime.now(timezone.utc) + timedelta(minutes=10)
 
 # If there are not baseline values stored, wait 12 hours before saving every hour
 if baseline_eCO2_restored is None or baseline_TVOC_restored is None:
-    baseline_log_counter_valid = datetime.now() + timedelta(hours=12)
+    baseline_log_counter_valid = datetime.now(timezone.utc) + timedelta(hours=12)
     print('Calcifer will store a valid baseline in 12 hours')
 else:
-    baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
+    baseline_log_counter_valid = datetime.now(timezone.utc) + timedelta(hours=1)
 
 # External air quality provided by AirVisual (IQAir)
 # Based on US EPA National Ambient Air Quality Standards https://support.airvisual.com/en/articles/3029425-what-is-aqi
@@ -334,20 +366,32 @@ else:
 
 iqair_query = 'https://api.airvisual.com/v2/nearest_city?lat={}&lon={}&key={}'.format(
     config['location']['latitude'], config['location']['longitude'], config['iqair']['token'])
-iqair_result = None
-iqair_aqi = None
-
+iqair_result, iqair_current = None, {}
 
 def update_iqair_result():
-    global iqair_result, iqair_query, iqair_aqi
+    global iqair_result, iqair_query, iqair_current
     threading.Timer(1800.0, update_iqair_result).start()
     iqair_result = requests.get(iqair_query)
     iqair_result = iqair_result.json()
     if iqair_result['status'] == 'success':
-        iqair_aqi = iqair_result['data']['current']['pollution']['aqius']
-        print("Outdoors air quality: AQI {} | {}".format(
-            iqair_aqi, iqair_result['data']['current']['pollution']['ts']))
-    return
+        iqair_results_current = iqair_result['data']['current']
+
+        iqair_current['temp'] = iqair_results_current['weather']['tp']
+        iqair_current['pressure'] = iqair_results_current['weather']['pr']
+        iqair_current['humidity'] = iqair_results_current['weather']['hu']
+        iqair_current['weather_timestamp'] = dateutil.parser.parse(iqair_results_current['weather']['ts'])
+
+        iqair_current['aqi'] = iqair_results_current['pollution']['aqius']
+        iqair_current['pollution_timestamp'] = dateutil.parser.parse(
+        iqair_results_current['pollution']['ts'])
+
+        print("Outdoors: {}°C, {} hPa, {}% RH, AQI {} | {}".format(
+            iqair_current['temp'],
+            iqair_current['pressure'],
+            iqair_current['humidity'],
+            iqair_current['aqi'],
+            readable_log_time( iqair_current['pollution_timestamp'] ) ) )
+        return
 
 
 update_iqair_result()
@@ -357,19 +401,32 @@ aio = Client(config['adafruit']['username'], config['adafruit']['key'])
 
 
 def send_to_adafruit_io():
-    global aio, sgp30, iqair_aqi
+    global aio, sgp30, iqair_current
 
-    aio_eCO2 = aio.feeds('eco2')
-    aio_TVOC = aio.feeds('tvoc')
-    aio_baseline_eCO2 = aio.feeds('baseline-eco2')
-    aio_baseline_TVOC = aio.feeds('baseline-tvoc')
-    aio_aqi = aio.feeds('aqi')
+    try:  # if we already have the feeds, assign them.
+        aio_eCO2                = aio.feeds('eco2')
+        aio_TVOC                = aio.feeds('tvoc')
+        aio_baseline_eCO2       = aio.feeds('baseline-eco2')
+        aio_baseline_TVOC       = aio.feeds('baseline-tvoc')
+        aio_aqi                 = aio.feeds('aqi')
+        aio_outdoors_temp       = aio.feeds('outdoors_temp')
+        aio_outdoors_humidity   = aio.feeds('outdoors_humidity')
+    except RequestError:  # if we don't, create and assign them.
+        aio_eCO2                = aio.create_feed(Feed(name='eco2'))
+        aio_TVOC                = aio.create_feed(Feed(name='tvoc'))
+        aio_baseline_eCO2       = aio.create_feed(Feed(name='baseline-eco2'))
+        aio_baseline_TVOC       = aio.create_feed(Feed(name='baseline-tvoc'))
+        aio_aqi                 = aio.create_feed(Feed(name='aqi'))
+        aio_outdoors_temp       = aio.create_feed(Feed(name='outdoors_temp'))
+        aio_outdoors_humidity   = aio.create_feed(Feed(name='outdoors_humidity'))
 
-    aio.send_data(aio_eCO2.key, sgp30.eCO2)
-    aio.send_data(aio_TVOC.key, sgp30.TVOC)
-    aio.send_data(aio_baseline_eCO2.key, sgp30.baseline_eCO2)
-    aio.send_data(aio_baseline_TVOC.key, sgp30.baseline_TVOC)
-    aio.send_data(aio_aqi.key, iqair_aqi)
+    aio.send_data(aio_eCO2.key,              sgp30.eCO2)
+    aio.send_data(aio_TVOC.key,              sgp30.TVOC)
+    aio.send_data(aio_baseline_eCO2.key,     sgp30.baseline_eCO2)
+    aio.send_data(aio_baseline_TVOC.key,     sgp30.baseline_TVOC)
+    aio.send_data(aio_aqi.key,               iqair_current['aqi'])
+    aio.send_data(aio_outdoors_temp.key,     iqair_current['temp'])
+    aio.send_data(aio_outdoors_humidity.key, iqair_current['humidity'])
 
     print("Readings sent to Adafruit IO")
     threading.Timer(30.0, send_to_adafruit_io).start()
@@ -384,8 +441,8 @@ def send_to_adafruit_io_run():
 send_to_adafruit_io_run()
 
 # Wait while sensor warms up
-warmup_counter = datetime.now() + timedelta(seconds=30)
-while datetime.now() < warmup_counter:
+warmup_counter = datetime.now(timezone.utc) + timedelta(seconds=30)
+while datetime.now(timezone.utc) < warmup_counter:
     if sgp30.eCO2 > 400 and sgp30.TVOC > 0:
         break
     time.sleep(1)
@@ -405,21 +462,24 @@ while True:
     # print("Lux: {:06.2f}, Proximity: {:04d}".format(lux, prox))
 
     # Get air quality
-    current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     result_human = 'CO2: {} ppm, VOC: {} ppb | {}'.format(
-        sgp30.eCO2, sgp30.TVOC, current_time_str)
+        sgp30.eCO2,
+        sgp30.TVOC,
+        datetime.now().strftime(readable_time_format))
     print(result_human)
 
     # Log baseline
     baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
-        sgp30.baseline_eCO2, sgp30.baseline_TVOC, current_time_str)
+        sgp30.baseline_eCO2,
+        sgp30.baseline_TVOC,
+        datetime.now().strftime(readable_time_format))
 
-    if datetime.now() > baseline_log_counter:
+    if datetime.now(timezone.utc) > baseline_log_counter:
         with open(result_log, 'a') as file:
             file.write(result_human + '\n')
 
-    if datetime.now() > baseline_log_counter_valid:
-        baseline_log_counter_valid = datetime.now() + timedelta(hours=1)
+    if datetime.now(timezone.utc) > baseline_log_counter_valid:
+        baseline_log_counter_valid = datetime.now(timezone.utc) + timedelta(hours=1)
         print("Valid baseline: " + baseline_human)
         with open(baseline_log, 'a') as file:
             file.write("Valid: " + baseline_human + '\n')
@@ -427,14 +487,14 @@ while True:
         # Store new valid baseline
         config['sgp30_baseline']['eCO2'] = sgp30.baseline_eCO2
         config['sgp30_baseline']['TVOC'] = sgp30.baseline_TVOC
-        config['sgp30_baseline']['timestamp'] = datetime.now()
+        config['sgp30_baseline']['timestamp'] = datetime.now(timezone.utc)
 
         with open(file_config, 'w') as file:
             yaml.dump(config, file)
             print('Baseline updated on config file')
 
-    elif datetime.now() > baseline_log_counter:
-        baseline_log_counter = datetime.now() + timedelta(minutes=10)
+    elif datetime.now(timezone.utc) > baseline_log_counter:
+        baseline_log_counter = datetime.now(timezone.utc) + timedelta(minutes=10)
 
         print("Baseline: " + baseline_human)
         with open(baseline_log, 'a') as file:
@@ -525,14 +585,16 @@ while True:
             checking_bad = False
             checking_bad_count = 0
 
+    """
+    # Check alerts
     print('Users with enabled alerts: ')
     pprint(alerts_enabled_ids)
 
     if (checking_good == True or checking_bad == True):
-        print('Checking for ')
         if (checking_good == True):
-            print('good, {}s'.format(checking_good_count))
+            print('Checking for good, {}s'.format(checking_good_count))
         if (checking_bad == True):
-            print('bad, {}s'.format(checking_bad_count))
+            print('Checking for bad, {}s'.format(checking_bad_count))
+    """
 
     time.sleep(1.0)

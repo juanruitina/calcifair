@@ -43,7 +43,7 @@ Or:
 - [x] Calibrate air quality sensor with baseline
 - [x] Integrate with Telegram bot
 - [x] Integrate with https://io.adafruit.com/ or similar
-- [ ] Get alerts on Telegram
+- [x] Get alerts on Telegram
 - [ ] Calibrate air quality sensor with humidity
 - [ ] Check that images exist (and their format)
 - [ ] Add web server for live results (Flask?)

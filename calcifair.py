@@ -18,6 +18,7 @@ import threading
 import board
 import busio
 import adafruit_sgp30
+import adafruit_bme280
 from ltr559 import LTR559
 import ST7789
 from setproctitle import setproctitle
@@ -63,6 +64,11 @@ with open(file_config) as file:
 # Set up CO2 & VOC sensor
 i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
 sgp30 = adafruit_sgp30.Adafruit_SGP30(i2c)
+
+# Set up BME280 temperature, humidity and pressure sensor
+bme280 = adafruit_bme280.Adafruit_BME280_I2C(i2c, address=0x76)
+# Source: https://meteologix.com/al/model-charts/euro/comunidad-de-madrid/sea-level-pressure.html
+bme280.sea_level_pressure = 1020
 
 # Set up light and proximity sensor
 ltr559 = LTR559()
@@ -351,6 +357,9 @@ if config['sgp30_baseline']['timestamp'] is not None:
     else:
         print('Stored baseline is too old')
 
+# Calculate https://www.cactus2000.de/uk/unit/masshum.shtml
+# sgp30.set_iaq_humidity(7.5666)
+
 result_log = os.path.join(dir_path, 'logs/sgp30-result.txt')
 baseline_log = os.path.join(dir_path, 'logs/sgp30-baseline.txt')
 baseline_log_counter = datetime.now(timezone.utc) + timedelta(minutes=10)
@@ -406,6 +415,8 @@ def send_to_adafruit_io():
     global aio, sgp30, iqair_current
 
     try:  # if we already have the feeds, assign them.
+        aio_temp                = aio.feeds('temp')
+        aio_humidity            = aio.feeds('humidity')
         aio_eCO2                = aio.feeds('eco2')
         aio_TVOC                = aio.feeds('tvoc')
         aio_baseline_eCO2       = aio.feeds('baseline-eco2')
@@ -414,6 +425,8 @@ def send_to_adafruit_io():
         aio_outdoors_temp       = aio.feeds('outdoors_temp')
         aio_outdoors_humidity   = aio.feeds('outdoors_humidity')
     except RequestError:  # if we don't, create and assign them.
+        aio_temp                = aio.create_feed(Feed(name='temp'))
+        aio_humidity            = aio.create_feed(Feed(name='humidity'))
         aio_eCO2                = aio.create_feed(Feed(name='eco2'))
         aio_TVOC                = aio.create_feed(Feed(name='tvoc'))
         aio_baseline_eCO2       = aio.create_feed(Feed(name='baseline-eco2'))
@@ -422,6 +435,8 @@ def send_to_adafruit_io():
         aio_outdoors_temp       = aio.create_feed(Feed(name='outdoors_temp'))
         aio_outdoors_humidity   = aio.create_feed(Feed(name='outdoors_humidity'))
 
+    aio.send_data(aio_temp.key,              bme280.temperature)
+    aio.send_data(aio_humidity.key,          bme280.humidity)
     aio.send_data(aio_eCO2.key,              sgp30.eCO2)
     aio.send_data(aio_TVOC.key,              sgp30.TVOC)
     aio.send_data(aio_baseline_eCO2.key,     sgp30.baseline_eCO2)
@@ -464,9 +479,13 @@ while True:
     # print("Lux: {:06.2f}, Proximity: {:04d}".format(lux, prox))
 
     # Get air quality
-    result_human = 'CO2: {} ppm, VOC: {} ppb | {}'.format(
+    # https://mkaz.blog/code/python-string-format-cookbook/
+    result_human = 'CO2: {} ppm, VOC: {} ppb | {:.1f}°C, {:.0f} hPa, {:.1f}% RH | {}'.format(
         sgp30.eCO2,
         sgp30.TVOC,
+        bme280.temperature,
+        bme280.pressure,
+        bme280.humidity,
         datetime.now().strftime(readable_time_format))
     print(result_human)
 

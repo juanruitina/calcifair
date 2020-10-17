@@ -156,18 +156,20 @@ def tg_start(update, context):
 def tg_weather(update, context):
     tg_message = ""
     if iqair_result['status'] == 'success':
-        tg_message += "\nAfuera hace {}°C, y la humedad relativa es de {}%".format(
+        tg_message += "\nAfuera hace {}°C, y hay un {}% de humedad".format(
             iqair_current['temp'],
             iqair_current['humidity'] )
-        
-        tg_message += "\n\nLa calidad del aire es AQI {} ({})".format(
+
+        tg_message += "\nCalidad del aire: AQI {} ({})\n".format(
             iqair_current['aqi'],
             relative_time( iqair_current['pollution_timestamp'], 'es' ) )
 
         if iqair_current['aqi'] > 100:
-            tg_message += " Hoy el aire de Madrid está muy contaminado. Es mejor no ventilar 🌆"
+            tg_message += "\nHoy el aire de Madrid está muy contaminado. Es mejor no ventilar 🌆"
         else:
-            tg_message += " Hoy se puede ventilar sin problema 🪟"
+            tg_message += "\nHoy se puede ventilar sin problema 🪟"
+            if 50 <= iqair_current['humidity'] <= 60 :
+                tg_message += " (y además la humedad fuera de casa es agradable)"
     else:
         tg_message += "Todavía estoy poniéndome en marcha, así que no tengo datos aún"
 

@@ -189,7 +189,6 @@ alerts_enabled_ids = []
 checking_good_pending_ids = []
 checking_bad_pending_ids = []
 
-@restricted
 def tg_alert(context):
     """Send the alarm message."""
     global checking_good_pending_ids, checking_bad_pending_ids
@@ -410,9 +409,8 @@ update_iqair_result()
 # Send data to Adafruit IO
 aio = Client(config['adafruit']['username'], config['adafruit']['key'])
 
-
 def send_to_adafruit_io():
-    global aio, sgp30, iqair_current
+    global aio, bme280, sgp30, iqair_current
 
     try:  # if we already have the feeds, assign them.
         aio_temp                = aio.feeds('temp')
@@ -422,8 +420,8 @@ def send_to_adafruit_io():
         aio_baseline_eCO2       = aio.feeds('baseline-eco2')
         aio_baseline_TVOC       = aio.feeds('baseline-tvoc')
         aio_aqi                 = aio.feeds('aqi')
-        aio_outdoors_temp       = aio.feeds('outdoors_temp')
-        aio_outdoors_humidity   = aio.feeds('outdoors_humidity')
+        aio_outdoors_temp       = aio.feeds('outdoors-temp')
+        aio_outdoors_humidity   = aio.feeds('outdoors-humidity')
     except RequestError:  # if we don't, create and assign them.
         aio_temp                = aio.create_feed(Feed(name='temp'))
         aio_humidity            = aio.create_feed(Feed(name='humidity'))
@@ -432,27 +430,31 @@ def send_to_adafruit_io():
         aio_baseline_eCO2       = aio.create_feed(Feed(name='baseline-eco2'))
         aio_baseline_TVOC       = aio.create_feed(Feed(name='baseline-tvoc'))
         aio_aqi                 = aio.create_feed(Feed(name='aqi'))
-        aio_outdoors_temp       = aio.create_feed(Feed(name='outdoors_temp'))
-        aio_outdoors_humidity   = aio.create_feed(Feed(name='outdoors_humidity'))
+        aio_outdoors_temp       = aio.create_feed(Feed(name='outdoors-temp'))
+        aio_outdoors_humidity   = aio.create_feed(Feed(name='outdoors-humidity'))
 
-    aio.send_data(aio_temp.key,              bme280.temperature)
-    aio.send_data(aio_humidity.key,          bme280.humidity)
-    aio.send_data(aio_eCO2.key,              sgp30.eCO2)
-    aio.send_data(aio_TVOC.key,              sgp30.TVOC)
-    aio.send_data(aio_baseline_eCO2.key,     sgp30.baseline_eCO2)
-    aio.send_data(aio_baseline_TVOC.key,     sgp30.baseline_TVOC)
-    aio.send_data(aio_aqi.key,               iqair_current['aqi'])
-    aio.send_data(aio_outdoors_temp.key,     iqair_current['temp'])
-    aio.send_data(aio_outdoors_humidity.key, iqair_current['humidity'])
+    try:
+        aio.send_data(aio_temp.key,              bme280.temperature)
+        aio.send_data(aio_humidity.key,          bme280.humidity)
+        aio.send_data(aio_eCO2.key,              sgp30.eCO2)
+        aio.send_data(aio_TVOC.key,              sgp30.TVOC)
+        aio.send_data(aio_baseline_eCO2.key,     sgp30.baseline_eCO2)
+        aio.send_data(aio_baseline_TVOC.key,     sgp30.baseline_TVOC)
+        aio.send_data(aio_aqi.key,               iqair_current['aqi'])
+        aio.send_data(aio_outdoors_temp.key,     iqair_current['temp'])
+        aio.send_data(aio_outdoors_humidity.key, iqair_current['humidity'])
 
-    print("Readings sent to Adafruit IO")
+        print("Readings sent to Adafruit IO")
+    except:
+        aio = Client(config['adafruit']['username'], config['adafruit']['key'])
+
     threading.Timer(30.0, send_to_adafruit_io).start()
 
 
 def send_to_adafruit_io_run():
     global aio, sgp30
-    # Start sending data to Adafruit IO after 15 min
-    threading.Timer(900.0, send_to_adafruit_io).start()
+    # Start sending data to Adafruit IO after 3 min
+    threading.Timer(180.0, send_to_adafruit_io).start()
 
 
 send_to_adafruit_io_run()
@@ -487,7 +489,6 @@ while True:
         bme280.pressure,
         bme280.humidity,
         datetime.now().strftime(readable_time_format))
-    print(result_human)
 
     # Log baseline
     baseline_human = 'CO2: {0} 0x{0:x}, VOC: {1} 0x{1:x} | {2}'.format(
@@ -573,12 +574,12 @@ while True:
     # Telegram alerts
 
     # Check if air quality gets from bad to good (-> notify enough ventilation time)
-    if (checking_good == False and sgp30.air_quality == 'bad'):
+    if (checking_good == False and sgp30.eCO2 > 1000):
         checking_good = True
         print("Checking good air quality")
 
     if (checking_good == True):
-        if (sgp30.air_quality == 'good'):
+        if (sgp30.eCO2 < 500):
             checking_good_count += 1
         else:
             checking_good_count = 0
@@ -590,12 +591,12 @@ while True:
             checking_good_count = 0
 
     # Check if air quality gets from good to bad (-> notify ventilation needed)
-    if (checking_bad == False and sgp30.air_quality == 'good'):
+    if (checking_bad == False and sgp30.eCO2 < 500):
         checking_bad = True
         print("Checking bad air quality")
 
     if (checking_bad == True):
-        if (sgp30.air_quality == 'bad'):
+        if (sgp30.eCO2 > 1000):
             checking_bad_count += 1
         else:
             checking_bad_count = 0
@@ -618,4 +619,5 @@ while True:
             print('Checking for bad, {}s'.format(checking_bad_count))
     """
 
+    # print(result_human)
     time.sleep(1.0)

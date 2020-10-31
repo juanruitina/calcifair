@@ -42,7 +42,7 @@ Or:
 
 Calcifair automatically handles the callibration of the SGP-30 sensor by storing and setting baselines following [these considerations](https://learn.adafruit.com/adafruit-sgp30-gas-tvoc-eco2-mox-sensor/circuitpython-wiring-test#baseline-set-and-get-2980177-19).
 
-Readings seem to have pretty disparate levels of accuracy. eCO2 readings seem reasonable. When compared with other sensors I have around, temperature readings seem accurate (but a fan might be needed for the latter), and humidity readings seem like 10 points higher. And the TVOC readings, well, they are always high: they stay in moderately high levels even after proper ventilation. They might be accurate (I can't compare with other sensors), but I have deliberatly chosen not to believe them for the sake of my own sanity.
+Readings seem to have pretty disparate levels of accuracy. eCO2 readings seem reasonable. When compared with other sensors I have around, temperature readings seem accurate (but a fan might be needed), and humidity readings seem like 10 points higher. The TVOC readings, well, they stay in moderately high levels even after proper ventilation. They might be accurate (I can't compare with other sensors), but I have deliberatly chosen not to believe them for the sake of my own sanity.
 
 ## Licences
 

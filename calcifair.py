@@ -84,6 +84,10 @@ disp = ST7789.ST7789(
 WIDTH = disp.width
 HEIGHT = disp.height
 
+LIMIT_ECO2_BAD = 1000
+LIMIT_ECO2_MEDIUM = 800
+LIMIT_TVOC_BAD = 261
+LIMIT_TVOC_MEDIUM = 87
 
 def turn_off_display():
     disp.set_backlight(0)
@@ -532,11 +536,14 @@ while True:
 
         color = (255, 255, 255)
         background_color = (0, 0, 0)
+
+        """
         if sgp30.air_quality == "bad":
             background_color = (255, 0, 0)
         elif sgp30.air_quality == "medium":
             color = (0, 0, 0)
             background_color = (255, 255, 0)
+        """
 
         if background_color != (0, 0, 0):
             img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)
@@ -566,6 +573,29 @@ while True:
         draw.text((125, 45), str(sgp30.TVOC),
                   font=font_bold, fill=color)
         draw.text((125, 80), 'ppb', font=font, fill=color)
+
+        # Rather accessible traffic lights from https://uxdesign.cc/beautiful-accessible-traffic-light-colors-b2b14a102a38
+        green = (125, 142, 40)
+        yellow = (252, 202, 67)
+        red = (171, 7, 48)
+
+        color_eCO2 = green
+        if (sgp30.eCO2 >= LIMIT_ECO2_BAD):
+            color_eCO2 = red
+        elif (sgp30.eCO2 >= LIMIT_ECO2_MEDIUM):
+            color_eCO2 = yellow
+
+        # draw.text((85, 6), '●', font=font, fill=color_eCO2)
+        draw.text((10, 120), '●', font=font, fill=color_eCO2)
+
+        color_TVOC = green
+        if (sgp30.TVOC >= LIMIT_TVOC_BAD):
+            color_TVOC = red
+        elif (sgp30.TVOC >= LIMIT_TVOC_MEDIUM):
+            color_TVOC = yellow
+        
+        # draw.text((200, 6), '●', font=font, fill=color_TVOC)
+        draw.text((125, 120), '●', font=font, fill=color_TVOC)
 
         disp.display(img)
     else:

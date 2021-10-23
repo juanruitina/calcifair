@@ -84,8 +84,15 @@ disp = ST7789.ST7789(
 WIDTH = disp.width
 HEIGHT = disp.height
 
+# Air quality levels
+# From Hong Kong Indoor Air Quality Management Group
+# https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf
+
+# CO2 levels in ppm
 LIMIT_ECO2_BAD = 1000
 LIMIT_ECO2_MEDIUM = 800
+
+# VOC levels in ppb
 LIMIT_TVOC_BAD = 261
 LIMIT_TVOC_MEDIUM = 87
 
@@ -316,10 +323,6 @@ def calcifer_expressions(expression):
 
 
 def air_quality():
-    # Air quality levels
-    # From Hong Kong Indoor Air Quality Management Group
-    # https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf
-
     global sgp30
     if sgp30:
         if sgp30.eCO2 and sgp30.TVOC:
@@ -474,6 +477,7 @@ checking_good = False
 checking_good_count = 0
 checking_bad = False
 checking_bad_count = 0
+background_img = None
 
 while True:
     air_quality()
@@ -537,20 +541,15 @@ while True:
         color = (255, 255, 255)
         background_color = (0, 0, 0)
 
-        """
-        if sgp30.air_quality == "bad":
-            background_color = (255, 0, 0)
-        elif sgp30.air_quality == "medium":
-            color = (0, 0, 0)
-            background_color = (255, 255, 0)
-        """
-
-        if background_color != (0, 0, 0):
-            img = Image.new('RGB', (WIDTH, HEIGHT), color=background_color)
+        # Animated background
+        if ( background_img == 'background.png' ):
+            background_img = 'background-alt.png'
         else:
-            image_path = os.path.join(
-                dir_path, 'assets/background.png')
-            img = Image.open(image_path)
+            background_img = 'background.png'
+
+        image_path = os.path.join(
+            dir_path, 'assets/', background_img)
+        img = Image.open(image_path)
 
         draw = ImageDraw.Draw(img)
 

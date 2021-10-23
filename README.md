@@ -44,11 +44,31 @@ Calcifair automatically handles the callibration of the SGP-30 sensor by storing
 
 Readings seem to have pretty disparate levels of accuracy. eCO2 readings seem reasonable. When compared with other sensors I have around, temperature readings seem accurate (but a fan might be needed), and humidity readings seem like 10 points higher. The TVOC readings, well, they stay in moderately high levels even after proper ventilation. They might be accurate (I can't compare with other sensors), but I have deliberatly chosen not to believe them for the sake of my own sanity.
 
+## Setting air quality levels
+
+The SGP-30 Air Quality Sensor Breakout measures equivalent carbon dioxyde (eCO2) in parts per million (ppm) and total volatile organic compounds (TVOC) in parts per billion (ppb). There are many different air quality standards set by a variety of agencies all around the world. I have so far relied on those set by the [Hong Kong Indoor Air Quality Management Group](https://www.iaq.gov.hk/media/65346/new-iaq-guide_eng.pdf), as they are the only ones I could find that provided levels in those units.
+
+### Volatile organic compounds
+
+Air quality standards for total VOC are usually set in μg/m3, but the SGP-30 sensor measures in parts per billion (ppb).
+
+However, [according to the manufacturer Sensirion](https://www.catsensors.com/media/pdf/Sensor_Sensirion_IAM.pdf), "The ppb-TVOC output of SGP30 is tuned for the gas mixture utilized by Mølhave et al. featuring a composition of 22 VOCs at concentrations similar to those determined on average in residential indoor environments. The mean molar mass of this mixture is 110 g/mol and hence, 1 ppb TVOC corresponds to 4.5 μg/m3."
+
+So if you would rather use a different standard set in μg/m3, just make sure to divide the TVOC levels in ppb by 4.5.
+
+### Other pollutants
+
+Although the SGP-30 sensor only measures CO2 and TVOC, you can use these two indicators as proxies for overall air quality.
+
+In particular, CO2 monitors have been used during the COVID-19 pandemic to identify poorly ventilated areas, where there could be higher concentrations of aerosols and an increased risk of contagion. There is also evidence that [CO2 readings can be used as a proxy for particulate matter levels (PM2.5, PM10)](https://www.sciencedirect.com/science/article/abs/pii/S0360132315001274).
+
+If levels of either CO2 or TVOC are too high, consider ventilating. Also be mindful of activities that are particularly polluting, such as cooking and cleaning.
+
 ## Licences
 
 - My installation makes use of images and animated GIFs of Calcifer, from the "Howl's Moving Castle" feature film by Studio Ghibli. I downloaded them from Giphy, Tenor, or elsewhere. Since they are probably copyrighted, I have removed them from the repo.
-  - Whichever image you use, make sure it's squared.
-  - Have a look at the `calcifer_expressions()` function and rewrite it as needed to avoid errors.
+ - Whichever image you use, make sure it's squared.
+ - Have a look at the `calcifer_expressions()` function and rewrite it as needed to avoid errors.
 - Emojis are from [Twemoji](https://twemoji.twitter.com/), licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## To do/Ideas

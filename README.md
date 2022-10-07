@@ -19,13 +19,10 @@ For now Calcifair runs on a Raspberry Pi 4 (2GB RAM) with Raspbian, and the foll
 
 ## Install
 
-Dependencies are managed by [`pipenv`](https://pipenv-es.readthedocs.io/es/latest/index.html).
-
 ```sh
-sudo apt-get update
-sudo apt-get install python-pip libatlas-base-dev
-pip3 install pipenv
-pipenv install
+sudo apt update
+sudo apt install python-pip libatlas-base-dev
+pip install adafruit-circuitpython-sgp30 adafruit-circuitpython-bme280 adafruit-io ltr559 numpy pillow python-telegram-bot pyyaml "rpi.gpio" setproctitle smbus smbus2 spidev st7789 psutil python-dateutil --upgrade
 ```
 
 ## Run Calcifair
@@ -36,7 +33,30 @@ Before running for the first time, copy `config-sample.yaml`, rename as `config.
 
 Or:
 
-`pipenv run python3 calcifair.py`
+`/usr/bin/python3 calcifair.py`
+
+## Set up terminal commands
+
+Add the following lines to `~/.bashrc` (for instance using `sudo nano ~/.bashrc`):
+
+```sh
+alias calcifair-run='python3 ~/calcifair/calcifair.py'
+alias calcifair-kill='pkill calcifair-main'
+```
+
+Then run `calcifair-run` to start Calcifair and `calcifair-kill` to stop it.
+
+## Run on boot
+
+Make `setup/start.sh` executable: `chmod +x setup/start.sh`
+
+Then add the following lines to `crontab` (add them using `crontab -e`):
+
+```sh
+@reboot sleep 30 && /home/Calcifer/calcifair/setup/start.sh &
+0 2 * * * pkill calcifair-main
+0 7 * * * if [ -z `pgrep calcifair` ]; then /usr/bin/python3 /home/Calcifer/calcifair/calcifair.py; fi
+```
 
 ## Callibration
 
@@ -83,3 +103,7 @@ If levels of either CO2 or TVOC are too high, consider ventilating. Also be mind
 - [ ] Add web server for live results (Flask?)
 - [ ] Show GIF while sensor warms up
 - [ ] Integrate with Home Assistant?
+
+## Notes
+
+- To update `requirements.txt`: `pip freeze > requirements.txt`

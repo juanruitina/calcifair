@@ -1,3 +1,3 @@
-@reboot sleep 30 && /home/pi/calcifair/setup/start.sh &
+@reboot sleep 30 && /home/Calcifer/calcifair/setup/start.sh &
 0 2 * * * pkill calcifair-main
-0 7 * * * if [ -z `pgrep calcifair` ]; then /usr/bin/python3 /home/pi/calcifair/calcifair.py; fi
+0 7 * * * if [ -z `pgrep calcifair` ]; then /usr/bin/python3 /home/Calcifer/calcifair/calcifair.py; fi

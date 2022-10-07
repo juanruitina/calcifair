@@ -10,3 +10,6 @@ __pycache__
 calcifer-idle.gif
 calcifer-rawr.gif
 calcifer-talks.gif
+
+**/ignore/*
+screen.log

@@ -10,7 +10,3 @@ sgp30_baseline:
   TVOC:
   eCO2:
   timestamp:
-telegram:
-  authorized_user_ids:
-    -
-  token:

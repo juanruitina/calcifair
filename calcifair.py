@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from Adafruit_IO import Client, Feed, RequestError
-from telegram.ext import Updater, CommandHandler, Filters
 import logging
 from PIL import ImageFont, ImageDraw, Image
 from functools import wraps
@@ -18,7 +17,7 @@ import threading
 import board
 import busio
 import adafruit_sgp30
-import adafruit_bme280
+from adafruit_bme280 import basic as adafruit_bme280
 from ltr559 import LTR559
 import ST7789
 from setproctitle import setproctitle
@@ -96,6 +95,10 @@ LIMIT_ECO2_MEDIUM = 800
 LIMIT_TVOC_BAD = 261
 LIMIT_TVOC_MEDIUM = 87
 
+# AQI levels
+LIMIT_AQI_BAD = 100
+LIMIT_AQI_MEDIUM = 50
+
 def turn_off_display():
     disp.set_backlight(0)
 
@@ -106,190 +109,6 @@ def turn_on_display():
 
 # Initialize display.
 disp.begin()
-
-# Initialize Telegram
-updater = Updater(
-    token=config['telegram']['token'], use_context=True)
-dispatcher = updater.dispatcher
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-
-# Restrict to certain Telegram users
-# https://github.com/python-telegram-bot/python-telegram-bot/wiki/Code-snippets#restrict-access-to-a-handler-decorator
-
-
-def restricted(func):
-    @wraps(func)
-    def wrapped(update, context, *args, **kwargs):
-        global config
-        user_id = update.effective_user.id
-        if user_id not in config['telegram']['authorized_user_ids']:
-            print("Unauthorized access denied for {}".format(user_id))
-            return
-        return func(update, context, *args, **kwargs)
-    return wrapped
-
-
-@restricted
-def tg_start(update, context):
-    tg_message = ""
-    if sgp30.air_quality and iqair_current['aqi'] is not None:
-        if sgp30.air_quality == 'bad':
-            if iqair_current['aqi'] > 100:
-                tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es muy mala. Habrá que aguantarse. 😷"
-            elif iqair_current['aqi'] > 50:
-                tg_message += "\nHuele a tigre. Aunque la calidad del aire exterior no es muy buena, quizá sea oportuno ventilar un poco. 🔥"
-            else:
-                tg_message += "\nHuele a tigre. Haz el favor de ventilar. 🔥"
-        elif sgp30.air_quality == 'medium':
-            if iqair_current['aqi'] > 100:
-                tg_message += "\nAunque vendría bien ventilar un poco, la calidad del aire fuera de casa es muy mala. 💔"
-            elif iqair_current['aqi'] > 50:
-                tg_message += "\nLa calidad del aire tanto dentro como fuera de casa es bastante mala. Habrá que aguantarse. 😷"
-            else:
-                tg_message += "\nEl ambiente está un poco cargado. No nos vendría mal ventilar 🏡"
-        elif sgp30.air_quality == 'good':
-            if iqair_current['aqi'] > 100:
-                tg_message += "\nLa calidad del aire es muy mala afuera, pero muy buena adentro. Hoy es mejor quedarse en casa y no ventilar. 🛋"
-            if iqair_current['aqi'] > 50:
-                tg_message += "\nLa calidad del aire es mala afuera, pero muy buena adentro. Hoy es mejor no ventilar. 🛋"
-            else:
-                tg_message += "\nQué aire más limpio 💖"
-
-        if sgp30.eCO2 == 400:
-            tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.TVOC, iqair_current['aqi'])
-        else:
-            tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.eCO2, sgp30.TVOC, iqair_current['aqi'])
-    else:
-        tg_message += "\nTodavía estoy poniéndome en marcha, así que no tengo datos aún"
-
-    context.bot.send_message(
-        chat_id=update.effective_chat.id, text=tg_message)
-
-
-@restricted
-def tg_weather(update, context):
-    tg_message = ""
-    if iqair_result['status'] == 'success':
-        tg_message += "\nAfuera hace {}°C, y hay un {}% de humedad".format(
-            iqair_current['temp'],
-            iqair_current['humidity'] )
-
-        tg_message += "\nCalidad del aire: AQI {} ({})\n".format(
-            iqair_current['aqi'],
-            relative_time( iqair_current['pollution_timestamp'], 'es' ) )
-
-        if iqair_current['aqi'] > 100:
-            tg_message += "\nHoy el aire de Madrid está muy contaminado. Es mejor no ventilar 🌆"
-        else:
-            tg_message += "\nHoy se puede ventilar sin problema 🪟"
-            if 50 <= iqair_current['humidity'] <= 60 :
-                tg_message += " (y además la humedad fuera de casa es agradable)"
-    else:
-        tg_message += "Todavía estoy poniéndome en marcha, así que no tengo datos aún"
-
-    context.bot.send_message(
-        chat_id=update.effective_chat.id, text=tg_message)
-
-# https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/timerbot.py
-
-
-alerts_enabled_ids = []
-checking_good_pending_ids = []
-checking_bad_pending_ids = []
-
-def tg_alert(context):
-    """Send the alarm message."""
-    global checking_good_pending_ids, checking_bad_pending_ids
-    job = context.job
-    user_id = job.context
-
-    if user_id in checking_good_pending_ids or user_id in checking_bad_pending_ids:
-        if user_id in checking_good_pending_ids:
-            tg_message = "¡La calidad del aire ha mejorado un montón! Ya podemos cerrar las ventanas 🪟"
-            print('Good air quality alert')
-            checking_good_pending_ids.remove(user_id)
-        elif user_id in checking_bad_pending_ids:
-            tg_message = "¡La calidad del aire es muy mala! Toca ventilar 🖼️"
-            print('Bad air quality alert')
-            checking_bad_pending_ids.remove(user_id)
-
-        if sgp30.eCO2 == 400:
-            tg_message += "\nCO2: <400 ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.TVOC, iqair_current['aqi'])
-        else:
-            tg_message += "\nCO2: {} ppm, VOC: {} ppb, AQI: {}".format(
-                sgp30.eCO2, sgp30.TVOC, iqair_current['aqi'])
-
-        context.bot.send_message(job.context, text=tg_message)
-        print('Air quality alert sent')
-
-@restricted
-def tg_alerts(update, context):
-    """Add a job to the queue."""
-
-    if 'job' in context.chat_data:
-        update.message.reply_text('Ya tienes las alertas activadas.')
-        return
-
-    # chat_id = update.message.chat_id
-    user = update.message.from_user
-    # update.message.reply_text('Hola ' + user.first_name + '. Tu ID es ' + str(user.id))
-    alerts_enabled_ids.append(user.id)
-
-    """Every x seconds"""
-    when = 5
-
-    if 'job' in context.chat_data:
-        old_job = context.chat_data['job']
-        old_job.schedule_removal()
-
-    new_job = context.job_queue.run_repeating(tg_alert, when, context=user.id)
-    context.chat_data['job'] = new_job
-
-    update.message.reply_text('¡Alertas activadas!')
-
-@restricted
-def tg_disable_alerts(update, context):
-    """Remove the job if the user changed their mind."""
-    if 'job' not in context.chat_data:
-        update.message.reply_text('No tienes las alertas activadas.')
-        return
-
-    user = update.message.from_user
-    job = context.chat_data['job']
-    job.schedule_removal()
-    del context.chat_data['job']
-    alerts_enabled_ids.remove(user.id)
-
-    update.message.reply_text('¡Alertas desactivadas!')
-
-# on different commands - answer in Telegram
-dispatcher.add_handler(CommandHandler(
-    "start", tg_start,
-    pass_args=True,
-    pass_job_queue=True,
-    pass_chat_data=True))
-dispatcher.add_handler(CommandHandler(
-    "alerts", tg_alerts,
-    pass_args=True,
-    pass_job_queue=True,
-    pass_chat_data=True))
-dispatcher.add_handler(CommandHandler(
-    "disable_alerts", tg_disable_alerts,
-    pass_args=True,
-    pass_job_queue=True,
-    pass_chat_data=True))
-dispatcher.add_handler(CommandHandler(
-    "weather", tg_weather,
-    pass_args=True,
-    pass_job_queue=True,
-    pass_chat_data=True))
-
-updater.start_polling()
-# updater.idle()
 
 
 # Load emoji while starts
@@ -387,7 +206,6 @@ iqair_result, iqair_current = None, {}
 
 def update_iqair_result():
     global iqair_result, iqair_query, iqair_current
-    threading.Timer(1800.0, update_iqair_result).start()
     iqair_result = requests.get(iqair_query)
     iqair_result = iqair_result.json()
     if iqair_result['status'] == 'success':
@@ -409,6 +227,11 @@ def update_iqair_result():
             iqair_current['aqi'],
             readable_log_time( iqair_current['pollution_timestamp'] ) ) )
         return
+    else:
+        print("AirVisual API error: {}".format(iqair_result['status']))
+        print(iqair_query)
+    
+    threading.Timer(1800.0, update_iqair_result).start()
 
 
 update_iqair_result()
@@ -557,6 +380,8 @@ while True:
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
         font_bold = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+        font_small = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
 
         draw.rectangle((0, 0, disp.width, 80), background_color)
 
@@ -592,61 +417,27 @@ while True:
             color_TVOC = red
         elif (sgp30.TVOC >= LIMIT_TVOC_MEDIUM):
             color_TVOC = yellow
+
+        color_AQI = green
+        if (iqair_current['aqi'] >= LIMIT_AQI_BAD):
+            color_AQI = red
+        elif (iqair_current['aqi'] >= LIMIT_AQI_MEDIUM):
+            color_AQI = yellow
         
         # draw.text((200, 6), '●', font=font, fill=color_TVOC)
         draw.text((125, 120), '●', font=font, fill=color_TVOC)
+
+        draw.text((125, 160), 'AQI ' + str(iqair_current['aqi']), font=font_small, fill=color)
+        draw.text((210, 160), '●', font=font_small, fill=color_AQI)
+
+        draw.text((125, 185), str(
+            iqair_current['temp']) + ' °C', font=font_small, fill=color)
+        draw.text((125, 210), str(iqair_current['humidity']) + '% RH', font=font_small, fill=color)
 
         disp.display(img)
     else:
         turn_off_display()
 
-    # Telegram alerts
-
-    # Check if air quality gets from bad to good (-> notify enough ventilation time)
-    if (checking_good == False and sgp30.eCO2 > 1000):
-        checking_good = True
-        print("Checking good air quality")
-
-    if (checking_good == True):
-        if (sgp30.eCO2 < 500):
-            checking_good_count += 1
-        else:
-            checking_good_count = 0
-
-        # Send alert if readings over the last 30 seconds show good air quality
-        if (checking_good_count > 30):
-            checking_good_pending_ids = alerts_enabled_ids.copy()
-            checking_good = False
-            checking_good_count = 0
-
-    # Check if air quality gets from good to bad (-> notify ventilation needed)
-    if (checking_bad == False and sgp30.eCO2 < 500):
-        checking_bad = True
-        print("Checking bad air quality")
-
-    if (checking_bad == True):
-        if (sgp30.eCO2 > 1000):
-            checking_bad_count += 1
-        else:
-            checking_bad_count = 0
-
-        # Send alert if readings over the last 30 minutes show bad air quality
-        if (checking_bad_count > 1800):
-            checking_bad_pending_ids = alerts_enabled_ids.copy()
-            checking_bad = False
-            checking_bad_count = 0
-
-    """
-    # Check alerts
-    print('Users with enabled alerts: ')
-    pprint(alerts_enabled_ids)
-
-    if (checking_good == True or checking_bad == True):
-        if (checking_good == True):
-            print('Checking for good, {}s'.format(checking_good_count))
-        if (checking_bad == True):
-            print('Checking for bad, {}s'.format(checking_bad_count))
-    """
 
     # print(result_human)
     time.sleep(1.0)

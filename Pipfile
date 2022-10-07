@@ -20,6 +20,7 @@ smbus2 = "*"
 spidev = "*"
 st7789 = "*"
 psutil = "*"
+adafruit-circuitpython-bme280 = "*"
 
 [requires]
 python_version = "3.7"

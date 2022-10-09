@@ -463,11 +463,11 @@ while True:
         
         draw.text((125, 120), '●', font=font, fill=color_TVOC)
 
-        draw.text((125, 160), '●', font=font_small, fill=color_AQI)
+        draw.text((125, 160), '■', font=font_small, fill=color_AQI)
         draw.text((148, 160), 'AQI ' + str(iqair_current['aqi']), font=font_small, fill=color)
 
         draw.text((125, 185), str(
-            iqair_current['temp']) + ' °C', font=font_small, fill=color)
+            iqair_current['temp']) + '°C', font=font_small, fill=color)
         draw.text((125, 210), str(iqair_current['humidity']) + '% RH', font=font_small, fill=color)
 
         disp.display(img)

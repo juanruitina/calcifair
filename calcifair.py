@@ -23,6 +23,7 @@ import ST7789
 from setproctitle import setproctitle
 import psutil
 from pprint import pprint
+import random
 
 from inc.time import *
 
@@ -121,24 +122,30 @@ print("🔥 Calcifer is waking up, please wait...")
 # print("SGP30 serial #", [hex(i) for i in sgp30.serial])
 
 
-def calcifer_expressions(expression):
+def calcifer_expressions(expression, seconds = 5):
     image_path = None
-    if expression == 'talks':
-        image_path = os.path.join(dir_path, 'assets/calcifer-talks.gif')
-    elif expression == 'idle':
-        image_path = os.path.join(dir_path, 'assets/calcifer-idle.gif')
-    elif expression == 'rawr':
-        image_path = os.path.join(dir_path, 'assets/calcifer-rawr.gif')
-    image = Image.open(image_path)
-    frame = 0
-    while frame < image.n_frames:
-        try:
-            image.seek(frame)
-            disp.display(image.resize((WIDTH, HEIGHT)))
-            frame += 1
-            time.sleep(0.05)
-        except EOFError:
+
+    try:
+        image_path = os.path.join(dir_path, 'assets/calcifer-' + expression + '.gif')
+        image = Image.open(image_path)
+
+        timeout = time.time() + 5 # 5 seconds from now
+        while True:
+            if time.time() > timeout:
+                break
+            
             frame = 0
+
+            while frame < image.n_frames:
+                try:
+                    image.seek(frame)
+                    disp.display(image.resize((WIDTH, HEIGHT)))
+                    frame += 1
+                    time.sleep(0.05)
+                except EOFError:
+                    frame = 0
+    except:
+        print('Calcifer expression not found')
 
 
 def air_quality():
@@ -185,8 +192,13 @@ if config['sgp30_baseline']['timestamp'] is not None:
 # Calculate https://www.cactus2000.de/uk/unit/masshum.shtml
 # sgp30.set_iaq_humidity(7.5666)
 
-result_log = os.path.join(dir_path, 'logs/sgp30-result.txt')
-baseline_log = os.path.join(dir_path, 'logs/sgp30-baseline.txt')
+try:
+    result_log = os.path.join(dir_path, 'logs/sgp30-result.txt')
+    baseline_log = os.path.join(dir_path, 'logs/sgp30-baseline.txt')
+    iqair_log = os.path.join(dir_path, 'logs/iqair.txt')
+except:
+    print('Error creating log files')
+
 baseline_log_counter = datetime.now(timezone.utc) + timedelta(minutes=10)
 
 # If there are not baseline values stored, wait 12 hours before saving every hour
@@ -204,10 +216,13 @@ iqair_query = 'https://api.airvisual.com/v2/nearest_city?lat={}&lon={}&key={}'.f
     config['location']['latitude'], config['location']['longitude'], config['iqair']['token'])
 iqair_result, iqair_current = None, {}
 
+print(iqair_query)
+
 def update_iqair_result():
     global iqair_result, iqair_query, iqair_current
     iqair_result = requests.get(iqair_query)
     iqair_result = iqair_result.json()
+    
     if iqair_result['status'] == 'success':
         iqair_results_current = iqair_result['data']['current']
 
@@ -220,19 +235,26 @@ def update_iqair_result():
         iqair_current['pollution_timestamp'] = dateutil.parser.parse(
         iqair_results_current['pollution']['ts'])
 
-        print("Outdoors: {}°C, {} hPa, {}% RH, AQI {} | {}".format(
+        iqair_message = "Outdoors: {}°C, {} hPa, {}% RH, AQI {} | Data time: {} | Log time: {}".format(
             iqair_current['temp'],
             iqair_current['pressure'],
             iqair_current['humidity'],
             iqair_current['aqi'],
-            readable_log_time( iqair_current['pollution_timestamp'] ) ) )
+            readable_log_time( iqair_current['pollution_timestamp'] ),
+            datetime.now().strftime(readable_time_format) )
+
+        print(iqair_message)
+        
+        # Log iqair results
+        with open(iqair_log, 'a') as file:
+            file.write(iqair_message + '\n')
+        
         return
     else:
         print("AirVisual API error: {}".format(iqair_result['status']))
         print(iqair_query)
-    
-    threading.Timer(1800.0, update_iqair_result).start()
 
+    threading.Timer(1800.0, update_iqair_result).start()
 
 update_iqair_result()
 
@@ -274,6 +296,7 @@ def send_to_adafruit_io():
         aio.send_data(aio_outdoors_temp.key,     iqair_current['temp'])
         aio.send_data(aio_outdoors_humidity.key, iqair_current['humidity'])
 
+        print(result_human)
         print("Readings sent to Adafruit IO")
     except:
         aio = Client(config['adafruit']['username'], config['adafruit']['key'])
@@ -301,6 +324,7 @@ checking_good_count = 0
 checking_bad = False
 checking_bad_count = 0
 background_img = None
+proximity_count = 0
 
 while True:
     air_quality()
@@ -354,9 +378,23 @@ while True:
             file.write(baseline_human + '\n')
 
     # Screen alerts
+    if prox >= 5:
+        screen_timeout = 10  # seconds the screen will stay on
+        proximity_count += 1
+    else:
+        proximity_count = 0
+
+    # What to show if screen on over 3 seconds
+    if proximity_count >= 3:
+        turn_on_display()
+
+        expressions = ['idle', 'talks']
+        expression = random.choice(expressions)
+        calcifer_expressions(expression)
+        proximity_count == 0
+
+    # What to show immediately
     if prox >= 5 or screen_timeout > 0:
-        if prox >= 5:
-            screen_timeout = 5  # seconds the screen will stay on
         screen_timeout -= 1
 
         turn_on_display()
@@ -409,7 +447,6 @@ while True:
         elif (sgp30.eCO2 >= LIMIT_ECO2_MEDIUM):
             color_eCO2 = yellow
 
-        # draw.text((85, 6), '●', font=font, fill=color_eCO2)
         draw.text((10, 120), '●', font=font, fill=color_eCO2)
 
         color_TVOC = green
@@ -424,11 +461,10 @@ while True:
         elif (iqair_current['aqi'] >= LIMIT_AQI_MEDIUM):
             color_AQI = yellow
         
-        # draw.text((200, 6), '●', font=font, fill=color_TVOC)
         draw.text((125, 120), '●', font=font, fill=color_TVOC)
 
-        draw.text((125, 160), 'AQI ' + str(iqair_current['aqi']), font=font_small, fill=color)
-        draw.text((210, 160), '●', font=font_small, fill=color_AQI)
+        draw.text((125, 160), '●', font=font_small, fill=color_AQI)
+        draw.text((148, 160), 'AQI ' + str(iqair_current['aqi']), font=font_small, fill=color)
 
         draw.text((125, 185), str(
             iqair_current['temp']) + ' °C', font=font_small, fill=color)

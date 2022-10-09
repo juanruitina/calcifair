@@ -42,6 +42,7 @@ Add the following lines to `~/.bashrc` (for instance using `sudo nano ~/.bashrc`
 ```sh
 alias calcifair-run='python3 ~/calcifair/calcifair.py'
 alias calcifair-kill='pkill calcifair-main'
+alias calcifair-restart='calcifair-kill && calcifair-run'
 ```
 
 Then run `calcifair-run` to start Calcifair and `calcifair-kill` to stop it.

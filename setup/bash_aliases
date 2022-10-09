@@ -1,2 +1,0 @@
-alias calcifair-run='python3 /home/Calcifer/calcifair/calcifair.py'
-alias calcifair-kill='pkill calcifair-main'

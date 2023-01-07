@@ -10,3 +10,8 @@ sgp30_baseline:
   TVOC:
   eCO2:
   timestamp:
+mqtt:
+  broker: 
+  port: 
+  username: 
+  password: 

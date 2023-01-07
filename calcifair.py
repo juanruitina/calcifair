@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from getmac import get_mac_address
 from Adafruit_IO import Client, Feed, RequestError
 import logging
 from PIL import ImageFont, ImageDraw, Image
@@ -24,8 +25,8 @@ from setproctitle import setproctitle
 import psutil
 from pprint import pprint
 import random
-
 from inc.time import *
+from paho.mqtt import client as mqtt_client
 
 def checkIfProcessRunning(processName):
     '''
@@ -312,6 +313,123 @@ def send_to_adafruit_io_run():
 
 send_to_adafruit_io_run()
 
+# for MQTT
+
+# from https://github.com/ironsheep/RPi-Reporter-MQTT2HA-Daemon/blob/8fbb4f140ad722f8779bc61bd7dadb79f63f0423/ISP-RPi-mqtt-daemon.py
+# what RPi device are we on?
+# get our hostnames so we can setup MQTT
+# this will fill-in rpi_mac
+
+rpi_mac = get_mac_address()
+print(rpi_mac)
+
+mac_basic = rpi_mac.lower().replace(":", "")
+mac_left = mac_basic[:6]
+mac_right = mac_basic[6:]
+print('mac lt=[{}], rt=[{}], mac=[{}]'.format(
+    mac_left, mac_right, mac_basic))
+uniqID = "RPi-{}Mon{}-calcifair".format(mac_left, mac_right)
+
+mqtt_connected = False  # global variable for the state of the connection
+
+mqtt_client_id = "homeassistant"
+mqtt_broker = config['mqtt']['broker']
+mqtt_port = config['mqtt']['port']
+mqtt_username = config['mqtt']['username']
+mqtt_password = config['mqtt']['password']
+
+
+def connect_mqtt():
+    def on_connect(client, userdata, flags, rc):
+        if rc == 0:
+            print("Connected to MQTT broker")
+        else:
+            print("Failed to connect to MQTT broker, return code %d\n", rc)
+
+    client = mqtt_client.Client(mqtt_client_id)
+    client.username_pw_set(mqtt_username, mqtt_password)
+    client.on_connect = on_connect
+    client.connect(mqtt_broker, mqtt_port)
+    return client
+
+
+def publish_mqtt(topic, msg, retain=False):
+    global mqtt
+
+    topic = mqtt_client_id + "/" + topic
+
+    msg = f"{msg}"
+    result = mqtt.publish(topic, msg, retain=retain)
+
+    status = result[0]
+    if status != 0:
+        print(f"Failed to send message to topic {topic}")
+
+
+mqtt = connect_mqtt()
+mqtt.loop_start()
+
+# Configuration topics and payloads
+mqtt_eco2_config = {
+    "uniq_id": f"{uniqID}_co2",
+    "name": "CO2",
+    "device_class": "carbon_dioxide",
+    "state_topic": f"{mqtt_client_id}/sensor/calcifair/state",
+    "unit_of_measurement": "ppm",
+    "value_template": "{{ value_json.eco2 }}",
+    "dev": {
+        "identifiers": [uniqID],
+        "name": "Calcifair"
+    }
+}
+
+mqtt_tvoc_config = {
+    "uniq_id": f"{uniqID}_voc",
+    "name": "VOC",
+    "device_class": "volatile_organic_compounds",
+    "state_topic": f"{mqtt_client_id}/sensor/calcifair/state",
+    "unit_of_measurement": "ppb",
+    "value_template": "{{ value_json.tvoc }}",
+    "pl_avail": "online",
+    "pl_not_avail": "offline",
+    "dev": {
+        "identifiers": [uniqID],
+        "name": "Calcifair"
+    }
+}
+
+publish_mqtt("sensor/calcifair/eco2/config", json.dumps(mqtt_eco2_config), retain=True)
+publish_mqtt("sensor/calcifair/tvoc/config", json.dumps(mqtt_tvoc_config), retain=True)
+
+def send_to_mqtt():
+    global bme280, sgp30
+
+    state = {
+        "timestamp": datetime.now().isoformat(),
+        "eco2": sgp30.eCO2,
+        "tvoc": sgp30.TVOC,
+        "temperature": "{:0.1f}".format(bme280.temperature),
+        "humidity": "{:0.0f}".format(bme280.humidity),
+        "baseline_eco2": sgp30.baseline_eCO2,
+        "baseline_tvoc": sgp30.baseline_TVOC
+    }
+    
+    publish_mqtt("sensor/calcifair/state", json.dumps(state))
+
+    # print(result_human)
+    print("Readings sent to MQTT")
+
+    threading.Timer(30.0, send_to_mqtt).start()
+
+
+def send_to_mqtt_run():
+    global aio, sgp30
+    # Start sending data to MQTT after 3 min
+    threading.Timer(30.0, send_to_mqtt).start()
+
+
+send_to_mqtt_run()
+
 # Wait while sensor warms up
 warmup_counter = datetime.now(timezone.utc) + timedelta(seconds=30)
 while datetime.now(timezone.utc) < warmup_counter:
@@ -427,13 +545,11 @@ while True:
         if (sgp30.eCO2 <= 400):
             draw.text((10, 45), '<400', font=font_bold, fill=color)
         else:
-            draw.text((10, 45), str(sgp30.eCO2),
-                      font=font_bold, fill=color)
+            draw.text((10, 45), str(sgp30.eCO2), font=font_bold, fill=color)
         draw.text((10, 80), 'ppm', font=font, fill=color)
 
         draw.text((125, 10), 'VOC', font=font, fill=color)
-        draw.text((125, 45), str(sgp30.TVOC),
-                  font=font_bold, fill=color)
+        draw.text((125, 45), str(sgp30.TVOC), font=font_bold, fill=color)
         draw.text((125, 80), 'ppb', font=font, fill=color)
 
         # Rather accessible traffic lights from https://uxdesign.cc/beautiful-accessible-traffic-light-colors-b2b14a102a38

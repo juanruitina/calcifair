@@ -21,6 +21,8 @@ spidev = "*"
 st7789 = "*"
 psutil = "*"
 adafruit-circuitpython-bme280 = "*"
+paho-mqtt = "*"
+get-mac = "*"
 
 [requires]
 python_version = "3.7"

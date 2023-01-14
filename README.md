@@ -4,25 +4,26 @@ Calcifair is the [resident fire demon](https://howlscastle.fandom.com/wiki/Calci
 
 * Gather indoor air quality levels via the SGP-30 sensor and temperature and humidity via the BME280 sensor.
 * Get outdoor temperature, humidity and air quality info from the IQAir AirVisual API.
-* Receive air quality information by asking a Telegram bot.
+* Provide air quality information by asking a Telegram bot.
+* Send air quality information to Home Assistant via MQTT.
 
 ## Hardware
 
-For now Calcifair runs on a Raspberry Pi 4 (2GB RAM) with Raspbian, and the following hardware bought from [Pimoroni](https://shop.pimoroni.com/):
+For now Calcifair runs on a Raspberry Pi 4 (2GB RAM) with Raspberry Pi OS 10 (bullseye), and the following hardware bought from [Pimoroni](https://shop.pimoroni.com/):
 
 - **SGP-30 Air Quality Sensor Breakout**, for equivalent CO2 and volatile organic compounds (TVOC) reading ([using library from Adafruit](https://learn.adafruit.com/adafruit-sgp30-gas-tvoc-eco2-mox-sensor/circuitpython-wiring-test)).
 - **BME280 Temperature, Pressure and Humidity Sensor Breakout** ([using library from Adafruit](https://learn.adafruit.com/adafruit-bme280-humidity-barometric-pressure-temperature-sensor-breakout/python-circuitpython-test)).
 - **ST7789 1.3" SPI Colour LCD screen**, with 240×240 resolution.
 - **LTR-559 Light and Proximity Sensor Breakout**, so Calcifer's screen turns on whenever I put my hand close to them.
 - **Breakout Garden** (I2C + SPI).
-- Little GPIO fan bought from [AliExpress](https://es.aliexpress.com/item/4000302941860.html) for cooling up Calcifair and improving temperature readings.
+- Little GPIO fan bought from [AliExpress](https://es.aliexpress.com/item/4000302941860.html) for cooling up Calcifair and improving temperature readings (currently not in use).
 
 ## Install
 
 ```sh
 sudo apt update
 sudo apt install python-pip libatlas-base-dev
-pip install adafruit-circuitpython-sgp30 adafruit-circuitpython-bme280 adafruit-io ltr559 numpy pillow python-telegram-bot pyyaml "rpi.gpio" setproctitle smbus smbus2 spidev st7789 psutil python-dateutil --upgrade
+pip install adafruit-circuitpython-sgp30 adafruit-circuitpython-bme280 adafruit-io ltr559 numpy pillow python-telegram-bot pyyaml "rpi.gpio" setproctitle smbus smbus2 spidev st7789 psutil python-dateutil paho-mqtt get-mac --upgrade
 ```
 
 ## Run Calcifair
@@ -54,9 +55,7 @@ Make `setup/start.sh` executable: `chmod +x setup/start.sh`
 Then add the following lines to `crontab` (add them using `crontab -e`):
 
 ```sh
-@reboot sleep 30 && /home/Calcifer/calcifair/setup/start.sh &
-0 2 * * * pkill calcifair-main
-0 7 * * * if [ -z `pgrep calcifair` ]; then /usr/bin/python3 /home/Calcifer/calcifair/calcifair.py; fi
+@reboot sleep 30 && /home/Calcifer/calcifair/setup/start.sh
 ```
 
 ## Callibration
@@ -99,11 +98,10 @@ If levels of either CO2 or TVOC are too high, consider ventilating. Also be mind
 - [x] Integrate with Telegram bot
 - [x] Integrate with https://io.adafruit.com/ or similar
 - [x] Get alerts on Telegram
+- [x] Integrate with Home Assistant
 - [ ] Calibrate air quality sensor with humidity
 - [ ] Check that images exist (and their format)
-- [ ] Add web server for live results (Flask?)
 - [ ] Show GIF while sensor warms up
-- [ ] Integrate with Home Assistant?
 
 ## Notes
 

@@ -398,8 +398,24 @@ mqtt_tvoc_config = {
     }
 }
 
+mqtt_lux_config = {
+    "uniq_id": f"{uniqID}_lux",
+    "name": "Light",
+    "device_class": "illuminance",
+    "state_topic": f"{mqtt_client_id}/sensor/calcifair/state",
+    "unit_of_measurement": "lx",
+    "value_template": "{{ value_json.lux }}",
+    "pl_avail": "online",
+    "pl_not_avail": "offline",
+    "dev": {
+        "identifiers": [uniqID],
+        "name": "Calcifair"
+    }
+}
+
 publish_mqtt("sensor/calcifair/eco2/config", json.dumps(mqtt_eco2_config), retain=True)
 publish_mqtt("sensor/calcifair/tvoc/config", json.dumps(mqtt_tvoc_config), retain=True)
+publish_mqtt("sensor/calcifair/lux/config", json.dumps(mqtt_lux_config), retain=True)
 
 def send_to_mqtt():
     global bme280, sgp30
@@ -411,7 +427,8 @@ def send_to_mqtt():
         "temperature": "{:0.1f}".format(bme280.temperature),
         "humidity": "{:0.0f}".format(bme280.humidity),
         "baseline_eco2": sgp30.baseline_eCO2,
-        "baseline_tvoc": sgp30.baseline_TVOC
+        "baseline_tvoc": sgp30.baseline_TVOC,
+        "lux": "{:0.1f}".format(lux)
     }
     
     publish_mqtt("sensor/calcifair/state", json.dumps(state))

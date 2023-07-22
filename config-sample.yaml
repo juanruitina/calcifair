@@ -8,7 +8,6 @@ sgp30_baseline:
   eCO2:
   timestamp:
 mqtt:
-  broker: 
   port: 
   username: 
   password: 

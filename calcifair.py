@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import socket
 from getmac import get_mac_address
 import logging
 from PIL import ImageFont, ImageDraw, Image
@@ -26,6 +27,7 @@ from pprint import pprint
 import random
 from inc.time import *
 from paho.mqtt import client as mqtt_client
+
 
 def checkIfProcessRunning(processName):
     '''
@@ -260,6 +262,22 @@ update_iqair_result()
 
 # for MQTT
 
+# Get local IP
+# https://tecadmin.net/python-how-to-find-local-ip-address/
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('192.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
+
+local_ip = get_local_ip()
+
 # from https://github.com/ironsheep/RPi-Reporter-MQTT2HA-Daemon/blob/8fbb4f140ad722f8779bc61bd7dadb79f63f0423/ISP-RPi-mqtt-daemon.py
 # what RPi device are we on?
 # get our hostnames so we can setup MQTT
@@ -278,7 +296,7 @@ uniqID = "RPi-{}Mon{}-calcifair".format(mac_left, mac_right)
 mqtt_connected = False  # global variable for the state of the connection
 
 mqtt_client_id = "homeassistant"
-mqtt_broker = config['mqtt']['broker']
+mqtt_broker = local_ip
 mqtt_port = config['mqtt']['port']
 mqtt_username = config['mqtt']['username']
 mqtt_password = config['mqtt']['password']

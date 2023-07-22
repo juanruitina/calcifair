@@ -5,7 +5,7 @@ Calcifair is the [resident fire demon](https://howlscastle.fandom.com/wiki/Calci
 * Gather indoor air quality levels via the SGP-30 sensor and temperature and humidity via the BME280 sensor.
 * Get outdoor temperature, humidity and air quality info from the IQAir AirVisual API.
 * Provide air quality information by asking a Telegram bot.
-* Send air quality information to Home Assistant via MQTT.
+* Publish air quality information via MQTT so it can be picked up by Home Assistant.
 
 ## Hardware
 

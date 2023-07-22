@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from getmac import get_mac_address
-from Adafruit_IO import Client, Feed, RequestError
 import logging
 from PIL import ImageFont, ImageDraw, Image
 from functools import wraps
@@ -259,60 +258,6 @@ def update_iqair_result():
 
 update_iqair_result()
 
-# Send data to Adafruit IO
-aio = Client(config['adafruit']['username'], config['adafruit']['key'])
-
-def send_to_adafruit_io():
-    global aio, bme280, sgp30, iqair_current
-
-    try:  # if we already have the feeds, assign them.
-        aio_temp                = aio.feeds('temp')
-        aio_humidity            = aio.feeds('humidity')
-        aio_eCO2                = aio.feeds('eco2')
-        aio_TVOC                = aio.feeds('tvoc')
-        aio_baseline_eCO2       = aio.feeds('baseline-eco2')
-        aio_baseline_TVOC       = aio.feeds('baseline-tvoc')
-        aio_aqi                 = aio.feeds('aqi')
-        aio_outdoors_temp       = aio.feeds('outdoors-temp')
-        aio_outdoors_humidity   = aio.feeds('outdoors-humidity')
-    except RequestError:  # if we don't, create and assign them.
-        aio_temp                = aio.create_feed(Feed(name='temp'))
-        aio_humidity            = aio.create_feed(Feed(name='humidity'))
-        aio_eCO2                = aio.create_feed(Feed(name='eco2'))
-        aio_TVOC                = aio.create_feed(Feed(name='tvoc'))
-        aio_baseline_eCO2       = aio.create_feed(Feed(name='baseline-eco2'))
-        aio_baseline_TVOC       = aio.create_feed(Feed(name='baseline-tvoc'))
-        aio_aqi                 = aio.create_feed(Feed(name='aqi'))
-        aio_outdoors_temp       = aio.create_feed(Feed(name='outdoors-temp'))
-        aio_outdoors_humidity   = aio.create_feed(Feed(name='outdoors-humidity'))
-
-    try:
-        aio.send_data(aio_temp.key,              bme280.temperature)
-        aio.send_data(aio_humidity.key,          bme280.humidity)
-        aio.send_data(aio_eCO2.key,              sgp30.eCO2)
-        aio.send_data(aio_TVOC.key,              sgp30.TVOC)
-        aio.send_data(aio_baseline_eCO2.key,     sgp30.baseline_eCO2)
-        aio.send_data(aio_baseline_TVOC.key,     sgp30.baseline_TVOC)
-        aio.send_data(aio_aqi.key,               iqair_current['aqi'])
-        aio.send_data(aio_outdoors_temp.key,     iqair_current['temp'])
-        aio.send_data(aio_outdoors_humidity.key, iqair_current['humidity'])
-
-        print(result_human)
-        print("Readings sent to Adafruit IO")
-    except:
-        aio = Client(config['adafruit']['username'], config['adafruit']['key'])
-
-    threading.Timer(30.0, send_to_adafruit_io).start()
-
-
-def send_to_adafruit_io_run():
-    global aio, sgp30
-    # Start sending data to Adafruit IO after 3 min
-    threading.Timer(180.0, send_to_adafruit_io).start()
-
-
-send_to_adafruit_io_run()
-
 # for MQTT
 
 # from https://github.com/ironsheep/RPi-Reporter-MQTT2HA-Daemon/blob/8fbb4f140ad722f8779bc61bd7dadb79f63f0423/ISP-RPi-mqtt-daemon.py
@@ -466,7 +411,7 @@ def send_to_mqtt():
     publish_mqtt("sensor/calcifair/state", json.dumps(state))
 
     # print(result_human)
-    print("Readings sent to MQTT")
+    print("Readings published via MQTT")
 
     threading.Timer(30.0, send_to_mqtt).start()
 

@@ -413,12 +413,44 @@ mqtt_lux_config = {
     }
 }
 
+mqtt_temperature_config = {
+    "uniq_id": f"{uniqID}_temperature",
+    "name": "Temperature",
+    "device_class": "temperature",
+    "state_topic": f"{mqtt_client_id}/sensor/calcifair/state",
+    "unit_of_measurement": "°C",
+    "value_template": "{{ value_json.temperature }}",
+    "pl_avail": "online",
+    "pl_not_avail": "offline",
+    "dev": {
+        "identifiers": [uniqID],
+        "name": "Calcifair"
+    }
+}
+
+mqtt_humidity_config = {
+    "uniq_id": f"{uniqID}_humidity",
+    "name": "Humidity",
+    "device_class": "humidity",
+    "state_topic": f"{mqtt_client_id}/sensor/calcifair/state",
+    "unit_of_measurement": "%",
+    "value_template": "{{ value_json.humidity }}",
+    "pl_avail": "online",
+    "pl_not_avail": "offline",
+    "dev": {
+        "identifiers": [uniqID],
+        "name": "Calcifair"
+    }
+}
+
 publish_mqtt("sensor/calcifair/eco2/config", json.dumps(mqtt_eco2_config), retain=True)
 publish_mqtt("sensor/calcifair/tvoc/config", json.dumps(mqtt_tvoc_config), retain=True)
 publish_mqtt("sensor/calcifair/lux/config", json.dumps(mqtt_lux_config), retain=True)
+publish_mqtt("sensor/calcifair/temperature/config", json.dumps(mqtt_temperature_config), retain=True)
+publish_mqtt("sensor/calcifair/humidity/config", json.dumps(mqtt_humidity_config), retain=True)
 
 def send_to_mqtt():
-    global bme280, sgp30
+    global bme280, sgp30, ltr559
 
     state = {
         "timestamp": datetime.now().isoformat(),
@@ -428,7 +460,7 @@ def send_to_mqtt():
         "humidity": "{:0.0f}".format(bme280.humidity),
         "baseline_eco2": sgp30.baseline_eCO2,
         "baseline_tvoc": sgp30.baseline_TVOC,
-        "lux": "{:0.1f}".format(lux)
+        "lux": "{:0.1f}".format( ltr559.get_lux() )
     }
     
     publish_mqtt("sensor/calcifair/state", json.dumps(state))
@@ -440,7 +472,7 @@ def send_to_mqtt():
 
 
 def send_to_mqtt_run():
-    global aio, sgp30
+    global aio, bme280, sgp30, ltr559
     # Start sending data to MQTT after 3 min
     threading.Timer(30.0, send_to_mqtt).start()
 
@@ -472,9 +504,10 @@ while True:
 
     # Get air quality
     # https://mkaz.blog/code/python-string-format-cookbook/
-    result_human = 'CO2: {} ppm, VOC: {} ppb | {:.1f}°C, {:.0f} hPa, {:.1f}% RH | {}'.format(
+    result_human = 'CO2: {} ppm, VOC: {} ppb, Lux: {:.1f} lx | {:.1f}°C, {:.0f} hPa, {:.1f}% RH | {}'.format(
         sgp30.eCO2,
         sgp30.TVOC,
+        lux,
         bme280.temperature,
         bme280.pressure,
         bme280.humidity,
